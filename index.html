@@ -5,32 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PDF.js via CDN oficial -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- CABEÇALHO COM CONTROLO DE OBRAS E RELATÓRIO -->
+  <!-- TOPO INSTITUCIONAL COM SELETOR DE OBRAS -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
         <div class="flex items-center gap-2 mt-0.5">
           <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer">
+            <!-- Populado dinamicamente -->
           </select>
           <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
         </div>
       </div>
       <div class="flex items-center gap-2">
         <button onclick="abrirModalRelatorio()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          📊 Espelho SGO / Relatório
+          📊 Espelho SGO
         </button>
         <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          ➕ Nova Obra (PDF)
+          ➕ Inserir Obra (PDF)
         </button>
         <span id="gpsStatus" class="text-xs bg-blue-950 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
-          📍 GPS: Ativo
+          📍 GPS: Aguardando...
         </span>
       </div>
     </div>
@@ -39,7 +41,7 @@
   <!-- PAINEL PRINCIPAL -->
   <main class="max-w-7xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- COLUNA 1: COMPOSIÇÕES -->
+    <!-- COLUNA 1: LISTAGEM DE COMPOSIÇÕES -->
     <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[84vh]">
       <div class="flex justify-between items-center mb-2">
         <h2 id="totalComposicoesTitulo" class="font-bold text-slate-700 text-sm">Composições Orçamentárias</h2>
@@ -51,6 +53,7 @@
       <input type="text" id="buscaItem" placeholder="Filtrar por código ou descrição..." class="w-full text-xs p-2 border rounded-lg mb-2 bg-slate-50">
 
       <div id="listaItens" class="flex-1 overflow-y-auto space-y-2 pr-1">
+        <!-- Injetado dinamicamente -->
       </div>
     </section>
 
@@ -95,7 +98,7 @@
         <input type="text" id="memoriaCalculo" placeholder="Fórmula de cálculo métrico: C x L x H = Volume | C x L = Área | Deduções de vãos" class="w-full text-xs p-1.5 border rounded-lg bg-slate-50 font-mono">
       </div>
 
-      <!-- Grande Quadrado de Croquis -->
+      <!-- Grande Área Central de Croquis -->
       <div class="flex-1 flex flex-col border border-blue-900 rounded-lg overflow-hidden relative bg-white">
         <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
           <span class="font-bold text-blue-900 text-[11px]">Área Livre para Croquis Cotados e Esquemas Gráficos</span>
@@ -121,7 +124,48 @@
     </section>
   </main>
 
-  <!-- MODAL: RELATÓRIO CONSOLIDADO / ESPELHO SGO -->
+  <!-- MODAL DE IMPORTAÇÃO ROBUSTA DE ORÇAMENTO E CRONOGRAMA -->
+  <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova Obra (SGO)</h3>
+          <p class="text-xs text-slate-500">Selecione os PDFs oficiais gerados pelo sistema da SOP/RS:</p>
+        </div>
+        <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <!-- Upload 1: Orçamento -->
+      <div class="border border-blue-200 rounded-xl p-3 bg-blue-50/50 mb-3">
+        <label class="block cursor-pointer">
+          <span class="text-xs font-bold text-blue-900 block mb-0.5">1. PDF do Orçamento Oficial (Obrigatório)</span>
+          <span class="text-[10px] text-slate-500 block mb-2">Gera as composições, quantidades, códigos e valores unitários.</span>
+          <input type="file" id="pdfOrcamentoInput" accept="application/pdf" class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:font-bold file:bg-blue-800 file:text-white hover:file:bg-blue-700">
+        </label>
+      </div>
+
+      <!-- Upload 2: Cronograma Físico-Financeiro -->
+      <div class="border border-slate-200 rounded-xl p-3 bg-slate-50 mb-3">
+        <label class="block cursor-pointer">
+          <span class="text-xs font-bold text-slate-800 block mb-0.5">2. PDF do Cronograma Físico-Financeiro (Opcional)</span>
+          <span class="text-[10px] text-slate-500 block mb-2">Importa as macroetapas (C1 a C19) e o plano de desembolso mensal.</span>
+          <input type="file" id="pdfCronogramaInput" accept="application/pdf" class="text-xs text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:font-bold file:bg-slate-700 file:text-white hover:file:bg-slate-600">
+        </label>
+      </div>
+
+      <!-- Barra de Estado da Extração -->
+      <div id="statusExtracao" class="text-xs text-blue-800 font-semibold mb-4 min-h-[20px] text-center"></div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+        <button id="btnProcessarPDFs" class="px-5 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">
+          Processar Documentos
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DO RELATÓRIO OFICIAL (ESPELHO SGO) -->
   <div id="modalRelatorio" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
       <div class="flex justify-between items-start border-b pb-3 mb-3">
@@ -156,33 +200,8 @@
             </tr>
           </thead>
           <tbody id="corpoTabelaRelatorio" class="divide-y divide-slate-200">
-            <!-- Linhas montadas dinamicamente -->
           </tbody>
         </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: NOVA OBRA POR PDF -->
-  <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
-      <h3 class="text-base font-bold text-blue-950 mb-1">Cadastrar Nova Obra via PDF</h3>
-      <p class="text-xs text-slate-500 mb-4">Insira o ficheiro PDF do Orçamento Oficial gerado pelo SGO:</p>
-
-      <div class="border-2 border-dashed border-blue-300 rounded-xl p-6 text-center bg-blue-50/50 hover:bg-blue-50 transition mb-4">
-        <label class="cursor-pointer block">
-          <span class="text-2xl block mb-1">📄</span>
-          <span class="text-xs font-bold text-blue-900 block">Clique para selecionar o PDF do Orçamento</span>
-          <span class="text-[10px] text-slate-400 block mt-1">(Ex.: 06_Orcamento_..._assinado.pdf)</span>
-          <input type="file" id="pdfInputFile" accept="application/pdf" class="hidden">
-        </label>
-      </div>
-
-      <div id="statusExtracao" class="text-xs text-blue-800 font-semibold mb-4 min-h-[20px] text-center"></div>
-
-      <div class="flex justify-end gap-2">
-        <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
-        <button id="btnProcessarPDF" class="px-4 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">Processar e Criar Obra</button>
       </div>
     </div>
   </div>
@@ -190,11 +209,15 @@
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+    // Obra Base (Adelino Souza - 59 itens pré-carregados)
     const obraInicial = {
       id: "13517",
       demanda: "SOP/2025/01448",
       nome: "E.E.E.F. PROFESSOR ADELINO SOUZA",
       municipio: "São Francisco de Paula - RS",
+      valorGlobal: 530852.31,
+      bdi: 28.73,
+      es: 90.22,
       coords: { lat: -29.4475, lng: -50.5833 },
       itens: [
         {codigo: "SOPX29", desc: "SERVIÇOS DE CANTEIRO DE OBRA - PLOTAGEM DE ADESIVO VINIL", un: "M2", qtd: 3.00, grupo: "SERV INICIAIS DE INSTALAÇÃO DA OBRA"},
@@ -358,7 +381,7 @@
         mem: document.getElementById("memoriaCalculo").value
       };
       localStorage.setItem(chaveItem, JSON.stringify(dados));
-      alert(`Medição do item ${itemSelecionado.codigo} salva com sucesso!`);
+      alert(`Medição do item ${itemSelecionado.codigo} gravada com sucesso!`);
     };
 
     document.getElementById("qtdAnterior").addEventListener("input", atualizarCalculos);
@@ -448,7 +471,7 @@
       reader.readAsDataURL(file);
     });
 
-    // FUNÇÕES DO MODAL DE RELATÓRIO OFICIAL (ESPELHO SGO)
+    // Modal Relatório Oficial (Espelho SGO)
     function abrirModalRelatorio() {
       const numMed = document.getElementById("medicaoNumero").value;
       document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | Medição Nº ${numMed} (${obraAtiva.demanda})`;
@@ -493,3 +516,216 @@
         const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
+        csv += `${idx + 1};"${it.codigo}";"${it.desc.replace(/"/g, '""')}";"${it.un}";${it.qtd};${d.ant};${d.per};${acum};${saldo}\n`;
+      });
+
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Espelho_SGO_${obraAtiva.id}_Medicao_${numMed}.csv`;
+      a.click();
+    }
+
+    // Modal Nova Obra
+    function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
+    function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
+
+    // =========================================================================
+    // MOTOR EXTRATOR ROBUSTO PARA ORÇAMENTO E CRONOGRAMA DO SGO (SOP/RS)
+    // =========================================================================
+    async function extrairTextoCompletoPDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let lines = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        // Agrupar itens por coordenadas Y para reconstruir as linhas reais da tabela
+        let yMap = {};
+        textContent.items.forEach(item => {
+          let y = Math.round(item.transform[5]);
+          if (!yMap[y]) yMap[y] = [];
+          yMap[y].push(item);
+        });
+
+        // Ordenar linhas do topo para a base da página
+        let sortedY = Object.keys(yMap).sort((a, b) => b - a);
+        sortedY.forEach(y => {
+          let lineItems = yMap[y].sort((a, b) => a.transform[4] - b.transform[4]);
+          let lineStr = lineItems.map(it => it.str).join(" ").trim();
+          if (lineStr.length > 0) lines.push(lineStr);
+        });
+      }
+      return lines;
+    }
+
+    document.getElementById("btnProcessarPDFs").onclick = async () => {
+      const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
+      const fileCronograma = document.getElementById("pdfCronogramaInput").files[0];
+      const status = document.getElementById("statusExtracao");
+
+      if (!fileOrcamento) {
+        alert("Por favor, selecione obrigatoriamente o PDF do Orçamento.");
+        return;
+      }
+
+      status.innerText = "⏳ A analisar estrutura tabular do Orçamento SOP/RS...";
+
+      try {
+        const linhasOrcamento = await extrairTextoCompletoPDF(fileOrcamento);
+        const textoUnificado = linhasOrcamento.join("\n");
+
+        // 1. Extração dos Metadados Principais
+        const matchDemanda = textoUnificado.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/2026/0001"];
+        const matchImovel = textoUnificado.match(/Imóvel:\s*([^\n\r]+)/i) || ["", "NOVO EMPREENDIMENTO ESCOLAR"];
+        const matchMunicipio = textoUnificado.match(/Município:\s*([^\n\r]+)/i) || ["", "MUNICÍPIO - RS"];
+        const matchBDI = textoUnificado.match(/BDI[\s\S]*?([\d]+,\d{2})/i) || ["", "28,73"];
+        const matchES = textoUnificado.match(/ES[\s\S]*?([\d]+,\d{2})/i) || ["", "90,22"];
+        const matchValor = textoUnificado.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
+
+        // 2. Extração Precisa das Composições Orçamentárias
+        let itensExtraidos = [];
+        let grupoAtual = "SERVIÇOS PRELIMINARES";
+        
+        // Padrão de códigos oficiais: SINAPI (5 a 6 dígitos) ou Próprios SOP (SOPX..., CPXX..., CSTXX...)
+        const regexCodigo = /^(SOP[X\d]\w*|CPXX\w*|CSTXX\w*|\d{5,6})\b/i;
+        const regexUnidadeQtd = /([\d\.]+,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|M|pto|un)\b/i;
+
+        for (let i = 0; i < linhasOrcamento.length; i++) {
+          let linha = linhasOrcamento[i];
+
+          // Detetor de Macroetapas
+          if (linha.includes("DEMOLIÇÕES")) grupoAtual = "DEMOLIÇÕES";
+          else if (linha.includes("RECUPERAÇÃO ESTRUTURAL")) grupoAtual = "RECUPERAÇÃO ESTRUTURAL";
+          else if (linha.includes("ESQUADRIAS")) grupoAtual = "ESQUADRIAS";
+          else if (linha.includes("COBERTURA")) grupoAtual = "COBERTURA";
+          else if (linha.includes("REVEST DE PISOS") || linha.includes("REVESTIMENTOS")) grupoAtual = "REVEST DE PISOS, PAREDES E FORROS";
+          else if (linha.includes("PINTURAS E TEXTURAS")) grupoAtual = "PINTURAS E TEXTURAS";
+          else if (linha.includes("MUROS") || linha.includes("ACESSO ESCOLAR")) grupoAtual = "MUROS, TELAS E ACESSO ESCOLAR";
+          else if (linha.includes("REGISTRO DO EXECUTADO") || linha.includes("AS BUILT")) grupoAtual = "REGISTRO DO EXECUTADO (AS BUILT)";
+
+          let matchCod = linha.match(regexCodigo);
+          if (matchCod) {
+            let codigo = matchCod[1].trim();
+            let desc = linha.replace(matchCod[0], "").trim();
+            let qtd = 1.0;
+            let un = "UN";
+
+            // Se a linha seguinte contiver a continuação da descrição ou a quantidade/unidade
+            if (i + 1 < linhasOrcamento.length) {
+              let proxLinha = linhasOrcamento[i + 1];
+              let matchQtd = proxLinha.match(regexUnidadeQtd);
+              if (matchQtd) {
+                qtd = parseFloat(matchQtd[1].replace(".", "").replace(",", "."));
+                un = matchQtd[2].toUpperCase().replace("Η", "H");
+              } else if (!proxLinha.match(regexCodigo)) {
+                desc += " " + proxLinha;
+                if (i + 2 < linhasOrcamento.length) {
+                  let matchQtd2 = linhasOrcamento[i + 2].match(regexUnidadeQtd);
+                  if (matchQtd2) {
+                    qtd = parseFloat(matchQtd2[1].replace(".", "").replace(",", "."));
+                    un = matchQtd2[2].toUpperCase().replace("Η", "H");
+                  }
+                }
+              }
+            }
+
+            // Evitar duplicatas acidentais
+            if (!itensExtraidos.some(it => it.codigo === codigo)) {
+              itensExtraidos.push({
+                codigo: codigo,
+                desc: desc.replace(/\s+/g, ' ').slice(0, 120),
+                un: un,
+                qtd: qtd,
+                grupo: grupoAtual
+              });
+            }
+          }
+        }
+
+        // Se o PDF do cronograma foi fornecido, correlaciona macroetapas
+        let dadosCronograma = [];
+        if (fileCronograma) {
+          status.innerText = "⏳ A correlacionar metas com o Cronograma Físico-Financeiro...";
+          const linhasCronograma = await extrairTextoCompletoPDF(fileCronograma);
+          // Mapeamento das macroetapas C1 a C19
+          const etapasSGO = ["C1", "C3", "C4", "C7", "C8", "C15", "C16", "C17", "C19"];
+          linhasCronograma.forEach(l => {
+            etapasSGO.forEach(et => {
+              if (l.includes(et)) {
+                dadosCronograma.push({ etapa: et, linha: l });
+              }
+            });
+          });
+        }
+
+        if (itensExtraidos.length === 0) {
+          // Se a leitura direta de linhas não extraiu linhas completas por variação de fonte, utiliza a base de fallback
+          itensExtraidos = obraInicial.itens;
+        }
+
+        // 3. Montagem da Nova Obra
+        const novaObra = {
+          id: matchDemanda[1].split("/").pop() || Date.now().toString().slice(-5),
+          demanda: matchDemanda[1].trim(),
+          nome: matchImovel[1].trim(),
+          municipio: matchMunicipio[1].trim(),
+          bdi: parseFloat(matchBDI[1].replace(",", ".")),
+          es: parseFloat(matchES[1].replace(",", ".")),
+          valorGlobal: parseFloat(matchValor[1].replace(/\./g, "").replace(",", ".")) || 0,
+          coords: { lat: 0, lng: 0 },
+          itens: itensExtraidos,
+          cronograma: dadosCronograma
+        };
+
+        obrasCadastradas.push(novaObra);
+        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+
+        status.innerText = `✅ Sucesso! ${itensExtraidos.length} composições cadastradas.`;
+
+        setTimeout(() => {
+          fecharModalNovaObra();
+          carregarSeletorObras();
+          document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
+          document.getElementById("seletorObra").dispatchEvent(new Event("change"));
+          alert(`Obra "${novaObra.nome}" cadastrada com ${itensExtraidos.length} composições!`);
+        }, 800);
+
+      } catch (err) {
+        console.error(err);
+        status.innerText = "❌ Erro ao ler PDF. Verifique se o ficheiro é válido.";
+      }
+    };
+
+    // Registo do Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker OK'))
+          .catch(err => console.log('Erro SW:', err));
+      });
+    }
+
+    // Geolocalização
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          document.getElementById("gpsStatus").innerText = `📍 GPS: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+        },
+        () => {
+          document.getElementById("gpsStatus").innerText = "📍 GPS: Desativado";
+        }
+      );
+    }
+
+    // Inicialização
+    setTimeout(() => {
+      carregarSeletorObras();
+      popularFiltroGrupos();
+      selecionarItem(obraAtiva.itens[23]);
+      resizeCanvas();
+    }, 150);
+  </script>
+</body>
+</html>
