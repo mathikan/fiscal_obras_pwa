@@ -1,180 +1,161 @@
 /**
- * sgo-parser.js - Módulo de Extração de Orçamentos (Excel/CSV e PDF)
+ * sgo-parser.js - Módulo Especialista em Importação de Orçamentos via CSV
+ * Mapeamento: Coluna D (Item/Categoria), E (Código), H (Descrição), I (Quantidade), J (Unidade)
  */
 
-window.extrairDadosPlanilhaExcel = async function(file) {
-  if (!window.XLSX) {
-    throw new Error("Biblioteca SheetJS (XLSX) não foi carregada no navegador.");
+window.extrairDadosOrcamentoCSV = async function(file) {
+  const texto = await file.text();
+  
+  // Detecta se o delimitador é ponto e vírgula (padrão Excel PT-BR) ou vírgula
+  const primeiraLinha = texto.split(/\r?\n/)[0] || "";
+  const delimitador = (primeiraLinha.split(";").length >= primeiraLinha.split(",").length) ? ";" : ",";
+
+  // Função para parsear linha de CSV respeitando aspas duplas
+  function parsearLinhaCSV(linhaStr, delim) {
+    let valores = [];
+    let dentroAspas = false;
+    let valorAtual = "";
+    
+    for (let i = 0; i < linhaStr.length; i++) {
+      const c = linhaStr[i];
+      if (c === '"') {
+        if (dentroAspas && linhaStr[i + 1] === '"') {
+          valorAtual += '"';
+          i++;
+        } else {
+          dentroAspas = !dentroAspas;
+        }
+      } else if (c === delim && !dentroAspas) {
+        valores.push(valorAtual.trim());
+        valorAtual = "";
+      } else {
+        valorAtual += c;
+      }
+    }
+    valores.push(valorAtual.trim());
+    return valores;
   }
 
-  const arrayBuffer = await file.arrayBuffer();
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  // Divide o texto em linhas preservando quebras dentro de aspas
+  const linhasBrutas = [];
+  let buffer = "";
+  let emAspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === '"') emAspas = !emAspas;
+    if ((c === '\n' || c === '\r') && !emAspas) {
+      if (c === '\r' && texto[i + 1] === '\n') i++;
+      if (buffer.trim()) linhasBrutas.push(buffer);
+      buffer = "";
+    } else {
+      buffer += c;
+    }
+  }
+  if (buffer.trim()) linhasBrutas.push(buffer);
 
-  // 1. Procura a aba solicitada (ou primeira aba disponível)
-  let nomeAba = workbook.SheetNames.find(n => n.toUpperCase().includes("ORÇ ESC 1ª FASE") || n.toUpperCase().includes("ORC ESC"));
-  if (!nomeAba) {
-    nomeAba = workbook.SheetNames[0];
+  if (linhasBrutas.length === 0) {
+    throw new Error("O arquivo CSV está vazio.");
   }
 
-  const sheet = workbook.Sheets[nomeAba];
-  // header: 1 transforma a aba em matriz de arrays puros (linha x coluna)
-  const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+  // 1. Extração de Metadados do Cabeçalho (Linhas 1 a 10)
+  let nomeObra = "";
+  let municipioObra = "RS";
+  let idtObra = "";
+  let valorGlobal = 0;
 
-  if (!linhas || linhas.length === 0) {
-    throw new Error(`A aba "${nomeAba}" está vazia.`);
+  for (let r = 0; r < Math.min(10, linhasBrutas.length); r++) {
+    const colunas = parsearLinhaCSV(linhasBrutas[r], delimitador);
+    for (let c = 0; c < colunas.length; c++) {
+      const cel = colunas[c];
+      if (/^OBRA:/i.test(cel) && colunas[c + 2]) {
+        nomeObra = colunas[c + 2];
+      }
+      if (/^Município:/i.test(cel) && colunas[c + 1]) {
+        municipioObra = colunas[c + 1];
+      }
+      if (/^IDT$/i.test(cel) && colunas[c + 1]) {
+        idtObra = colunas[c + 1];
+      }
+      if (/^TOTAL ORÇAM/i.test(cel) && colunas[c + 1]) {
+        valorGlobal = parseFloat(colunas[c + 1].replace(/\./g, "").replace(",", ".")) || 0;
+      }
+    }
   }
 
+  if (!nomeObra) {
+    nomeObra = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ").toUpperCase();
+  }
+
+  // 2. Extração das Composições Orçamentárias
   let itens = [];
   let categoriaAtual = "SERVIÇOS PRELIMINARES";
 
-  // 2. Varredura Linha a Linha
-  for (let i = 0; i < linhas.length; i++) {
-    const linha = linhas[i];
-    if (!linha || linha.length === 0) continue;
+  for (let r = 0; r < linhasBrutas.length; r++) {
+    const col = parsearLinhaCSV(linhasBrutas[r], delimitador);
+    if (col.length < 10) continue;
 
-    // Colunas mapeadas (índice baseado em 0):
-    // D = linha[3] (Número do Item)
-    // E = linha[4] (Código da Composição)
-    // H = linha[7] (Nome / Descrição)
-    // I = linha[8] (Quantidade)
-    // J = linha[9] (Unidade)
-    const itemNumRaw = String(linha[3] !== undefined ? linha[3] : "").trim();
-    const codigoRaw  = String(linha[4] !== undefined ? linha[4] : "").trim();
-    const nomeRaw    = String(linha[7] !== undefined ? linha[7] : "").trim();
-    const qtdRaw     = linha[8];
-    const unidadeRaw = String(linha[9] !== undefined ? linha[9] : "").trim();
+    // Colunas oficiais:
+    // D = col[3] (Nº Item)
+    // E = col[4] (Código)
+    // H = col[7] (Descrição / Categoria)
+    // I = col[8] (Quantidade)
+    // J = col[9] (Unidade)
+    const itemNum = (col[3] || "").trim();
+    const codigo = (col[4] || "").trim();
+    const desc = (col[7] || "").trim();
+    const qtdRaw = (col[8] || "").trim();
+    const unidade = (col[9] || "").trim().toUpperCase();
 
-    if (!itemNumRaw && !codigoRaw && !nomeRaw) continue;
-
-    // Converte vírgula decimal se vier como texto
-    let qtdNumerica = 0;
-    if (typeof qtdRaw === "number") {
-      qtdNumerica = qtdRaw;
-    } else if (typeof qtdRaw === "string" && qtdRaw.trim() !== "") {
-      qtdNumerica = parseFloat(qtdRaw.replace(/\./g, "").replace(",", "."));
-    }
-
-    // Regra da Coluna D:
-    // Se o número for inteiro (ex.: "1", "2", "3"), é título de categoria
-    // Se tiver ponto/decimal (ex.: "1.1", "2.3") ou se tiver código válido, é composição
-    const itemNumLimpo = itemNumRaw.replace(",", ".");
-    const isNumeroInteiro = /^\d+$/.test(itemNumLimpo);
-    const isDecimal = /^\d+\.\d+/.test(itemNumLimpo);
-
-    if (isNumeroInteiro && nomeRaw && !codigoRaw) {
-      categoriaAtual = nomeRaw;
+    // Identifica linhas de cabeçalho e descarta
+    if (itemNum.toUpperCase() === "Nº ITEM" || codigo.toUpperCase() === "CÓDIGO" || desc.toUpperCase() === "DESCRIÇÃO DO ITEM") {
       continue;
     }
 
-    // Se possui código de composição ou é item decimal com quantidade válida
-    if (codigoRaw || (isDecimal && nomeRaw)) {
-      // Ignora linhas de cabeçalho da planilha
-      if (codigoRaw.toUpperCase() === "CÓDIGO" || nomeRaw.toUpperCase() === "DESCRIÇÃO") {
-        continue;
+    // Regra da Coluna D:
+    // Números inteiros (ex: "1.", "2.", "3.") sem código na coluna E definem o nome da categoria
+    const numLimpo = itemNum.replace(/\.$/, "").trim();
+    const isNumeroInteiro = /^\d+$/.test(numLimpo);
+
+    if (isNumeroInteiro && !codigo && desc) {
+      categoriaAtual = desc;
+      continue;
+    }
+
+    // Se possui código na coluna E, é uma composição válida
+    if (codigo) {
+      let qtd = 0;
+      if (qtdRaw) {
+        if (qtdRaw.includes(",")) {
+          qtd = parseFloat(qtdRaw.replace(/\./g, "").replace(",", "."));
+        } else {
+          qtd = parseFloat(qtdRaw);
+        }
       }
 
-      const codFinal = codigoRaw || itemNumLimpo;
-      const unFinal = unidadeRaw.toUpperCase() || "UN";
-
       itens.push({
-        itemNum: itemNumLimpo,
-        codigo: codFinal,
-        desc: nomeRaw.slice(0, 150),
-        un: unFinal,
-        qtd: isNaN(qtdNumerica) ? 0 : qtdNumerica,
+        itemNum: itemNum,
+        codigo: codigo,
+        desc: desc.slice(0, 150),
+        un: unidade || "UN",
+        qtd: isNaN(qtd) ? 0 : qtd,
         grupo: categoriaAtual
       });
     }
   }
 
   if (itens.length === 0) {
-    throw new Error(`Nenhuma composição encontrada na aba "${nomeAba}". Verifique as colunas D, E, H, I, J.`);
+    throw new Error("Nenhuma composição encontrada. Certifique-se de que exportou a aba 'ORÇ ESC 1ª FASE' em formato CSV.");
   }
 
-  // Tenta extrair o nome do arquivo limpo como demanda/escola
-  const nomeArquivoLimpo = file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ");
+  const idFinal = idtObra || Date.now().toString().slice(-4);
 
   return {
     uid: "oat_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-    id: "ORC-" + Date.now().toString().slice(-4),
-    demanda: "OAT/" + new Date().getFullYear() + "/" + Date.now().toString().slice(-4),
-    nome: nomeArquivoLimpo.slice(0, 45).toUpperCase(),
-    municipio: "RS",
-    valorGlobal: 0,
-    itens: itens
-  };
-};
-
-/**
- * Fallback para PDF (mantido caso receba somente PDF)
- */
-window.extrairDadosOrcamentoSGO = async function(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer), disableFontFace: true }).promise;
-  let todasLinhas = [];
-  let textoBruto = "";
-
-  for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
-    const page = await pdf.getPage(pNum);
-    const textContent = await page.getTextContent();
-    let yBuckets = {};
-
-    textContent.items.forEach(it => {
-      const str = it.str ? it.str.trim() : "";
-      if (!str) return;
-      textoBruto += str + " ";
-      const yCoord = Math.round(it.transform[5]);
-      let foundKey = Object.keys(yBuckets).find(k => Math.abs(k - yCoord) <= 3);
-      if (!foundKey) {
-        foundKey = yCoord;
-        yBuckets[foundKey] = [];
-      }
-      yBuckets[foundKey].push({ str: str, x: it.transform[4] });
-    });
-
-    const sortedYs = Object.keys(yBuckets).map(Number).sort((a, b) => b - a);
-    sortedYs.forEach(y => {
-      const rowItems = yBuckets[y].sort((a, b) => a.x - b.x);
-      const lineStr = rowItems.map(i => i.str).join(" ").trim();
-      if (lineStr) todasLinhas.push(lineStr);
-    });
-  }
-
-  const matchDemanda = textoBruto.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/" + new Date().getFullYear() + "/001"];
-  const matchImovel = textoBruto.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
-  const matchMunicipio = textoBruto.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "RS"];
-  const matchValor = textoBruto.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
-
-  let itens = [];
-  let grupoAtual = "SERVIÇOS DE CANTEIRO DE OBRA";
-
-  for (let i = 0; i < todasLinhas.length; i++) {
-    let linha = todasLinhas[i].trim();
-    let matchCod = linha.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\b/i);
-    if (matchCod) {
-      let cod = matchCod[1].toUpperCase();
-      let mQtd = linha.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|M|pto|un)\b/i);
-      let qtd = mQtd ? parseFloat(mQtd[1].replace(/\./g, "").replace(",", ".")) : 1.0;
-      let un = mQtd ? mQtd[2].toUpperCase().replace("Η", "H") : "UN";
-      let desc = linha.replace(matchCod[0], "").trim();
-
-      itens.push({
-        codigo: cod,
-        desc: desc.slice(0, 140),
-        un: un,
-        qtd: qtd,
-        grupo: grupoAtual
-      });
-    }
-  }
-
-  return {
-    uid: "oat_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-    id: matchDemanda[1].split("/").pop() || Date.now().toString().slice(-4),
-    demanda: matchDemanda[1].trim(),
-    nome: matchImovel[1].trim(),
-    municipio: matchMunicipio[1].trim(),
-    valorGlobal: parseFloat(matchValor[1].replace(/\./g, "").replace(",", ".")) || 0,
+    id: idFinal,
+    demanda: "SOP/" + new Date().getFullYear() + "/" + idFinal,
+    nome: nomeObra.slice(0, 60).toUpperCase(),
+    municipio: municipioObra,
+    valorGlobal: valorGlobal,
     itens: itens
   };
 };
