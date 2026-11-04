@@ -39,6 +39,9 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button id="btnHistoricoRecovery" onclick="abrirModalRecovery()" class="hidden bg-teal-700 hover:bg-teal-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          🕒 Recovery
+        </button>
         <button id="btnCadernoPDF" onclick="dispararGeracaoCaderno()" class="hidden bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           📑 Caderno PDF
         </button>
@@ -58,7 +61,7 @@
   <!-- PAINEL CENTRAL DE LISTAGEM SANFONA (ACCORDION INLINE) -->
   <main class="max-w-5xl mx-auto p-4 flex-1 w-full flex flex-col">
 
-    <!-- BARRA DE CONTROLO DE FILTROS E MEDIÇÃO -->
+    <!-- BARRA DE CONTROLO DE FILTROS, MEDIÇÃO E SNAPSHOT MANUAL -->
     <div id="barraControles" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4 flex flex-wrap justify-between items-center gap-3">
       <div class="flex items-center gap-3 flex-1 min-w-[280px]">
         <input type="text" id="buscaItem" placeholder="Buscar código ou descrição do serviço..." class="w-full text-xs p-2 border rounded-lg bg-slate-50">
@@ -67,9 +70,14 @@
         </select>
       </div>
 
-      <div class="flex items-center gap-2">
-        <span class="text-xs font-bold text-slate-600">Medição Atual:</span>
-        <input type="number" id="medicaoNumero" value="1" min="1" max="99" class="w-16 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-600">Medição Atual:</span>
+          <input type="text" id="medicaoNumero" value="1" placeholder="Ex: 1, 1.1" class="w-20 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50 uppercase">
+        </div>
+        <button onclick="criarSnapshotManual()" title="Grava um ponto de recuperação com a data e hora atual" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1">
+          📸 Criar Ponto de Restauração
+        </button>
       </div>
     </div>
 
@@ -78,6 +86,31 @@
     </div>
 
   </main>
+
+  <!-- MODAL: HISTÓRICO & RECOVERY POR DATA/HORA -->
+  <div id="modalRecovery" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[82vh]">
+      <div class="flex justify-between items-start border-b pb-3 mb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <span>🕒 Pontos de Restauração (Recovery)</span>
+          </h3>
+          <p class="text-xs text-slate-500">Volte as medições, croquis e memórias para uma data e hora anterior.</p>
+        </div>
+        <button onclick="fecharModalRecovery()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div id="listaSnapshots" class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+      </div>
+
+      <div class="flex justify-between items-center border-t pt-3 mt-3 text-xs">
+        <span class="text-slate-400 text-[11px]">Snapshots gravados localmente por segurança</span>
+        <button onclick="fecharModalRecovery()" class="px-4 py-1.5 font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: NOVA OBRA / OAT VIA PDF -->
   <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -189,6 +222,12 @@
     let codigoItemAberto = null;
     let canvasesAtivos = {};
 
+    function obterMedicaoAtualLimpa() {
+      const el = document.getElementById("medicaoNumero");
+      let val = el ? el.value.trim() : "1";
+      return val || "1";
+    }
+
     function atualizarContagemLixeira() {
       document.getElementById("contagemLixeira").innerText = lixeiraObras.length;
     }
@@ -198,6 +237,7 @@
       const btnExcluir = document.getElementById("btnExcluirOAT");
       const btnEspelho = document.getElementById("btnEspelhoSGO");
       const btnCaderno = document.getElementById("btnCadernoPDF");
+      const btnRecovery = document.getElementById("btnHistoricoRecovery");
       const barraControles = document.getElementById("barraControles");
       const demandaBadge = document.getElementById("demandaBadge");
 
@@ -209,6 +249,7 @@
         btnExcluir.classList.add("hidden");
         btnEspelho.classList.add("hidden");
         btnCaderno.classList.add("hidden");
+        btnRecovery.classList.add("hidden");
         barraControles.classList.add("hidden");
         const opt = document.createElement("option");
         opt.value = "";
@@ -222,6 +263,7 @@
       btnExcluir.classList.remove("hidden");
       btnEspelho.classList.remove("hidden");
       btnCaderno.classList.remove("hidden");
+      btnRecovery.classList.remove("hidden");
       barraControles.classList.remove("hidden");
 
       if (!obraAtiva || !obrasCadastradas.some(o => o.uid === obraAtiva.uid)) {
@@ -282,7 +324,131 @@
     }
 
     // =========================================================================
-    // RENDERIZADOR SANFONA INLINE (ACCORDION)
+    // MOTOR DE SNAPSHOTS TEMPORAIS (POINT-IN-TIME RECOVERY)
+    // =========================================================================
+    function registrarSnapshotAutomatico(motivo) {
+      if (!obraAtiva) return;
+
+      const numMed = obterMedicaoAtualLimpa();
+      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
+      let historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
+
+      let dadosMedicaoAtual = {};
+      obraAtiva.itens.forEach(it => {
+        const chaveItem = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+        const chaveCroqui = `croqui_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+        const chaveFoto = `foto_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+
+        const dadosSalvos = localStorage.getItem(chaveItem);
+        if (dadosSalvos) dadosMedicaoAtual[chaveItem] = dadosSalvos;
+
+        const croquiSalvo = localStorage.getItem(chaveCroqui);
+        if (croquiSalvo) dadosMedicaoAtual[chaveCroqui] = croquiSalvo;
+
+        const fotoSalva = localStorage.getItem(chaveFoto);
+        if (fotoSalva) dadosMedicaoAtual[chaveFoto] = fotoSalva;
+      });
+
+      const agora = new Date();
+      const carimboData = agora.toLocaleDateString("pt-BR") + " às " + agora.toLocaleTimeString("pt-BR");
+
+      const novoSnapshot = {
+        id: "snap_" + Date.now(),
+        dataHoraISO: agora.toISOString(),
+        carimbo: carimboData,
+        numMedicao: numMed,
+        motivo: motivo || "Atualização de campo",
+        dados: dadosMedicaoAtual
+      };
+
+      historico.unshift(novoSnapshot);
+      if (historico.length > 30) historico.pop();
+
+      localStorage.setItem(chaveHistorico, JSON.stringify(historico));
+    }
+
+    function criarSnapshotManual() {
+      if (!obraAtiva) return;
+      const numMed = obterMedicaoAtualLimpa();
+      const descricao = prompt("Dê um nome para este ponto de recuperação:", `Marco de Conferência Medição ${numMed}`);
+      if (descricao) {
+        registrarSnapshotAutomatico(`📸 Marco Manual: ${descricao}`);
+        alert("Ponto de restauração salvo com sucesso!");
+      }
+    }
+
+    function abrirModalRecovery() {
+      if (!obraAtiva) return;
+
+      const container = document.getElementById("listaSnapshots");
+      container.innerHTML = "";
+
+      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
+      const historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
+
+      if (historico.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-400 text-xs">
+            Nenhum ponto de restauração anterior gravado para esta OAT ainda.<br>
+            Os pontos são criados automaticamente a cada salvamento de medição ou pelo botão "Criar Ponto de Restauração".
+          </div>
+        `;
+      } else {
+        historico.forEach((snap, idx) => {
+          const div = document.createElement("div");
+          div.className = "flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs hover:border-teal-400 transition";
+          
+          div.innerHTML = `
+            <div>
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="font-bold text-slate-800">${snap.carimbo}</span>
+                <span class="text-[10px] bg-teal-100 text-teal-900 font-bold px-1.5 py-0.2 rounded">Medição ${snap.numMedicao}</span>
+                ${idx === 0 ? '<span class="text-[9px] bg-slate-200 text-slate-700 px-1 rounded font-semibold">Mais recente</span>' : ''}
+              </div>
+              <p class="text-slate-500 text-[11px]">${snap.motivo}</p>
+            </div>
+            <button onclick="restaurarSnapshot('${snap.id}')" class="bg-teal-700 hover:bg-teal-600 text-white font-bold px-3 py-1.5 rounded-lg shadow text-xs transition">
+              Restaurar
+            </button>
+          `;
+          container.appendChild(div);
+        });
+      }
+
+      document.getElementById("modalRecovery").classList.remove("hidden");
+    }
+
+    function fecharModalRecovery() {
+      document.getElementById("modalRecovery").classList.add("hidden");
+    }
+
+    function restaurarSnapshot(snapshotId) {
+      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
+      const historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
+      const snap = historico.find(s => s.id === snapshotId);
+
+      if (!snap) return;
+
+      const confirma = confirm(`Deseja reverter todas as medições para o estado de:\n\n${snap.carimbo} (${snap.motivo})?\n\nAs medições atuais serão substituídas pelas medições gravadas naquela data.`);
+      if (!confirma) return;
+
+      registrarSnapshotAutomatico("Snapshot automático antes da restauração de histórico");
+
+      Object.keys(snap.dados).forEach(k => {
+        localStorage.setItem(k, snap.dados[k]);
+      });
+
+      document.getElementById("medicaoNumero").value = snap.numMedicao;
+
+      fecharModalRecovery();
+      codigoItemAberto = null;
+      renderizarLista();
+
+      alert(`Medições revertidas com sucesso para a data: ${snap.carimbo}!`);
+    }
+
+    // =========================================================================
+    // RENDERIZADOR SANFONA INLINE (COM MED. ANTERIOR \ SALDO ACUMULADO)
     // =========================================================================
     function renderizarLista() {
       if (!obraAtiva) {
@@ -293,7 +459,7 @@
       const container = document.getElementById("listaItens");
       const busca = document.getElementById("buscaItem").value.toLowerCase();
       const grupo = document.getElementById("filtroGrupo").value;
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
 
       container.innerHTML = "";
       
@@ -307,8 +473,8 @@
         const isAberto = item.codigo === codigoItemAberto;
         const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${numMed}`;
         const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
-        const acum = dadosSalvos.ant + dadosSalvos.per;
-        const saldo = item.qtd - acum;
+        const acumSalvo = dadosSalvos.ant + dadosSalvos.per;
+        const saldoSalvo = item.qtd - acumSalvo;
 
         const chaveFoto = `foto_${obraAtiva.uid}_${item.codigo}_${numMed}`;
         const fotoSalva = localStorage.getItem(chaveFoto);
@@ -325,7 +491,7 @@
             <div class="flex items-center gap-2 mb-1">
               <span class="font-bold text-xs px-2 py-0.5 rounded ${isAberto ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}">${item.codigo}</span>
               <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">${item.grupo}</span>
-              ${dadosSalvos.per > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">Medido no Período</span>' : ''}
+              ${dadosSalvos.per > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">Medido: ' + dadosSalvos.per.toFixed(2) + '</span>' : ''}
               ${fotoSalva ? '<span class="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded">📷 Foto Anexada</span>' : ''}
             </div>
             <p class="text-xs font-semibold text-slate-800 leading-snug">${item.desc}</p>
@@ -333,7 +499,7 @@
           <div class="text-right flex items-center gap-3">
             <div>
               <span class="text-xs font-mono font-bold text-slate-700 block">${item.qtd.toFixed(2)} ${item.un}</span>
-              <span class="text-[10px] ${saldo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'} block">Saldo: ${saldo.toFixed(2)}</span>
+              <span class="text-[10px] ${saldoSalvo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'} block">Saldo: ${saldoSalvo.toFixed(2)}</span>
             </div>
             <span class="text-slate-400 font-bold text-sm transform transition ${isAberto ? 'rotate-180 text-blue-700' : ''}">▼</span>
           </div>
@@ -347,21 +513,44 @@
 
           gaveta.innerHTML = `
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <div class="bg-white p-2 rounded-lg border border-slate-200">
+              <!-- QTD CONTRATADA -->
+              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Contrato</span>
-                <span class="font-bold text-slate-800 text-sm">${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+                <span class="font-bold text-slate-800 text-sm mt-1">${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
               </div>
-              <div class="bg-white p-2 rounded-lg border border-slate-200">
-                <span class="text-slate-400 block text-[10px] uppercase font-bold">Med. Anterior</span>
-                <input type="number" id="inline_ant_${item.codigo}" value="${dadosSalvos.ant.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-slate-50">
+
+              <!-- MED. ANTERIOR \ SALDO ACUMULADO (COM DADOS SALVOS) -->
+              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
+                <div class="flex justify-between items-baseline mb-1">
+                  <span class="text-slate-500 block text-[10px] uppercase font-bold">Med. Anterior</span>
+                  <span class="text-[9px] text-slate-400">Salvo: ${dadosSalvos.ant.toFixed(2)}</span>
+                </div>
+                <input type="number" id="inline_ant_${item.codigo}" value="${dadosSalvos.ant.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-slate-50 text-xs">
+                <div class="mt-1.5 pt-1 border-t border-slate-100 flex justify-between items-center text-[10px]">
+                  <span class="text-slate-400 font-semibold uppercase">Acumulado:</span>
+                  <span id="inline_acum_${item.codigo}" class="font-bold text-slate-700 font-mono">${acumSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+                </div>
               </div>
-              <div class="bg-white p-2 rounded-lg border-2 border-blue-600">
-                <span class="text-blue-700 block text-[10px] uppercase font-bold">Medição Atual</span>
-                <input type="number" id="inline_per_${item.codigo}" value="${dadosSalvos.per.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-extrabold text-blue-900 bg-blue-50/30">
+
+              <!-- MEDIÇÃO ATUAL -->
+              <div class="bg-white p-2 rounded-lg border-2 border-blue-600 flex flex-col justify-between">
+                <div class="flex justify-between items-baseline mb-1">
+                  <span class="text-blue-700 block text-[10px] uppercase font-bold">Medição Atual (${numMed})</span>
+                  <span class="text-[9px] text-blue-600 font-semibold">Salvo: ${dadosSalvos.per.toFixed(2)}</span>
+                </div>
+                <input type="number" id="inline_per_${item.codigo}" value="${dadosSalvos.per.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-extrabold text-blue-900 bg-blue-50/30 text-xs">
+                <div class="mt-1.5 pt-1 border-t border-blue-100 text-[10px] text-blue-600 font-semibold text-right">
+                  Aferição em canteiro
+                </div>
               </div>
-              <div class="bg-white p-2 rounded-lg border border-slate-200">
+
+              <!-- SALDO RESTANTE -->
+              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Saldo Restante</span>
-                <span id="inline_saldo_${item.codigo}" class="font-bold ${saldo < 0 ? 'text-red-600' : 'text-emerald-700'} text-sm">${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+                <span id="inline_saldo_${item.codigo}" class="font-bold ${saldoSalvo < 0 ? 'text-red-600' : 'text-emerald-700'} text-sm mt-1">${saldoSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+                <div class="mt-1.5 pt-1 border-t border-slate-100 text-[10px] text-slate-400 text-right">
+                  Diferença contratual
+                </div>
               </div>
             </div>
 
@@ -414,15 +603,23 @@
     function vincularCalculosInline(item) {
       const inAnt = document.getElementById(`inline_ant_${item.codigo}`);
       const inPer = document.getElementById(`inline_per_${item.codigo}`);
+      const acumEl = document.getElementById(`inline_acum_${item.codigo}`);
       const saldoEl = document.getElementById(`inline_saldo_${item.codigo}`);
 
       function recalcular() {
         const total = item.qtd;
         const ant = parseFloat(inAnt.value) || 0;
         const per = parseFloat(inPer.value) || 0;
-        const saldo = total - (ant + per);
-        saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
-        saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm" : "font-bold text-emerald-700 text-sm";
+        const acum = ant + per;
+        const saldo = total - acum;
+
+        if (acumEl) {
+          acumEl.innerText = `${acum.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
+        }
+        if (saldoEl) {
+          saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
+          saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm mt-1" : "font-bold text-emerald-700 text-sm mt-1";
+        }
       }
 
       if (inAnt && inPer) {
@@ -432,7 +629,7 @@
     }
 
     function salvarMedicaoInline(codigo) {
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
       const chaveItem = `med_${obraAtiva.uid}_${codigo}_${numMed}`;
       const inAnt = document.getElementById(`inline_ant_${codigo}`);
       const inPer = document.getElementById(`inline_per_${codigo}`);
@@ -445,14 +642,15 @@
       };
       localStorage.setItem(chaveItem, JSON.stringify(dados));
 
-      // Salva o traçado do canvas em Base64
       const canvasEl = document.getElementById(`canvas_${codigo}`);
       if (canvasEl) {
         const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
         localStorage.setItem(chaveCroqui, canvasEl.toDataURL("image/png"));
       }
 
-      alert(`Medição do item ${codigo} salva com sucesso!`);
+      registrarSnapshotAutomatico(`Alteração salva no item ${codigo}`);
+
+      alert(`Medição do item ${codigo} salva com sucesso para a Medição ${numMed}!`);
       renderizarLista();
     }
 
@@ -468,8 +666,7 @@
       const ctx = canvas.getContext("2d");
       let desenhando = false;
 
-      // Restaura o traçado salvo anteriormente se existir
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
       const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
       const croquiSalvo = localStorage.getItem(chaveCroqui);
       if (croquiSalvo) {
@@ -516,7 +713,7 @@
       if (canvasesAtivos[codigo]) {
         const { canvas, ctx } = canvasesAtivos[codigo];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const numMed = document.getElementById("medicaoNumero").value;
+        const numMed = obterMedicaoAtualLimpa();
         const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
         localStorage.removeItem(chaveCroqui);
       }
@@ -543,34 +740,33 @@
           const cx = c.getContext("2d");
           cx.drawImage(img, 0, 0, w, h);
 
-          // Estampa da Data no Rodapé
           const hoje = new Date().toLocaleDateString("pt-BR");
-          const texto = `OAT: ${obraAtiva.demanda} | ITEM: ${codigo} | DATA: ${hoje}`;
+          const numMed = obterMedicaoAtualLimpa();
+          const texto = `OAT: ${obraAtiva.demanda} | MED: ${numMed} | ITEM: ${codigo} | DATA: ${hoje}`;
           cx.fillStyle = "rgba(0, 0, 0, 0.65)";
-          cx.fillRect(15, c.height - 50, 700, 40);
+          cx.fillRect(15, c.height - 50, 720, 40);
           cx.fillStyle = "#FFFFFF";
           cx.font = "bold 20px Arial";
           cx.fillText(texto, 25, c.height - 22);
 
           const jpegBase64 = c.toDataURL("image/jpeg", 0.85);
 
-          // Persiste no LocalStorage para o Caderno PDF
-          const numMed = document.getElementById("medicaoNumero").value;
           const chaveFoto = `foto_${obraAtiva.uid}_${codigo}_${numMed}`;
           localStorage.setItem(chaveFoto, jpegBase64);
 
-          // Dispara o download nativo para a galeria
           const a = document.createElement("a");
           const dataNome = hoje.split("/").reverse().join("");
           const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-          a.download = `${idOAT}_MED${numMed.padStart(2, "0")}_${codigo}_${dataNome}_01.jpg`;
+          const medNome = numMed.replace(/[\/\\:\*\?"<>\|\s]/g, "_");
+          a.download = `${idOAT}_MED${medNome}_${codigo}_${dataNome}_01.jpg`;
           a.href = jpegBase64;
           a.click();
 
           const statusFotoEl = document.getElementById(`statusFoto_${codigo}`);
           if (statusFotoEl) statusFotoEl.innerText = "✅ Foto de campo anexada para o Caderno PDF";
 
-          alert(`Foto gravada na memória e anexada ao item ${codigo}!`);
+          registrarSnapshotAutomatico(`Foto anexada ao item ${codigo}`);
+          alert(`Foto gravada na memória e anexada ao item ${codigo} (Medição ${numMed})!`);
         };
         img.src = evt.target.result;
       };
@@ -582,7 +778,7 @@
         alert("Selecione ou cadastre uma OAT primeiro.");
         return;
       }
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
       window.gerarCadernoMedicaoPDF(obraAtiva, numMed);
     }
 
@@ -673,7 +869,7 @@
     function abrirModalRelatorio() {
       if (!obraAtiva) return;
 
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
       document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | OAT ${obraAtiva.demanda} | Medição Nº ${numMed}`;
       const tbody = document.getElementById("corpoTabelaRelatorio");
       tbody.innerHTML = "";
@@ -708,7 +904,7 @@
     function exportarCSVRelatorio() {
       if (!obraAtiva) return;
 
-      const numMed = document.getElementById("medicaoNumero").value;
+      const numMed = obterMedicaoAtualLimpa();
       let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
 
       obraAtiva.itens.forEach((it, idx) => {
@@ -723,14 +919,14 @@
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-      a.download = `Espelho_SGO_${idOAT}_Medicao_${numMed}.csv`;
+      const medNome = numMed.replace(/[\/\\:\*\?"<>\|\s]/g, "_");
+      a.download = `Espelho_SGO_${idOAT}_Medicao_${medNome}.csv`;
       a.click();
     }
 
     function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
-    // Chamada do módulo desacoplado sgo-parser.js
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
       const status = document.getElementById("statusExtracao");
@@ -783,7 +979,9 @@
 
     document.getElementById("buscaItem").addEventListener("input", renderizarLista);
     document.getElementById("filtroGrupo").addEventListener("change", renderizarLista);
-    document.getElementById("medicaoNumero").addEventListener("change", renderizarLista);
+    document.getElementById("medicaoNumero").addEventListener("input", () => {
+      renderizarLista();
+    });
 
     setTimeout(() => {
       carregarSeletorObras();
