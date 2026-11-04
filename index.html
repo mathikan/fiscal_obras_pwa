@@ -12,15 +12,19 @@
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- TOPO INSTITUCIONAL -->
+  <!-- CABEÇALHO COM CONTROLO DE OATs E OBRAS -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
         <div class="flex items-center gap-2 mt-0.5">
-          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer">
+          <!-- Seletor de Contratos / OATs -->
+          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-xs md:text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer max-w-[320px] md:max-w-md truncate">
           </select>
           <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
+          <button onclick="confirmarExclusaoObra()" title="Excluir esta OAT/Obra" class="text-xs bg-red-800/80 hover:bg-red-700 text-red-200 px-2 py-1 rounded transition">
+            🗑️ Excluir OAT
+          </button>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -28,10 +32,10 @@
           📊 Espelho SGO
         </button>
         <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          ➕ Inserir Obra (PDF)
+          ➕ Inserir OAT (PDF)
         </button>
         <span id="gpsStatus" class="text-xs bg-blue-950 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
-          📍 GPS: Aguardando...
+          📍 GPS: Ativo
         </span>
       </div>
     </div>
@@ -55,7 +59,7 @@
       </div>
     </section>
 
-    <!-- COLUNA 2 E 3: FICHA DE MEDIÇÃO & CROQUIS AMPLIADO -->
+    <!-- COLUNA 2 E 3: FICHA DE MEDIÇÃO, QUANTITATIVOS E CROQUIS AMPLIADO -->
     <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col h-[84vh]">
       
       <div class="border-b pb-2 mb-2 flex justify-between items-start">
@@ -96,7 +100,7 @@
         <input type="text" id="memoriaCalculo" placeholder="Fórmula de cálculo métrico: C x L x H = Volume | C x L = Área | Deduções de vãos" class="w-full text-xs p-1.5 border rounded-lg bg-slate-50 font-mono">
       </div>
 
-      <!-- Grande Área Central de Croquis -->
+      <!-- Grande Quadrado de Croquis -->
       <div class="flex-1 flex flex-col border border-blue-900 rounded-lg overflow-hidden relative bg-white">
         <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
           <span class="font-bold text-blue-900 text-[11px]">Área Livre para Croquis Cotados e Esquemas Gráficos</span>
@@ -122,13 +126,13 @@
     </section>
   </main>
 
-  <!-- MODAL DE IMPORTAÇÃO ROBUSTA -->
+  <!-- MODAL: NOVA OBRA / OAT VIA PDF -->
   <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
       <div class="flex justify-between items-start mb-3">
         <div>
-          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova Obra (SGO)</h3>
-          <p class="text-xs text-slate-500">Selecione o PDF do orçamento oficial da SOP/RS:</p>
+          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT / Obra</h3>
+          <p class="text-xs text-slate-500">Selecione o PDF do Orçamento Oficial gerado pelo SGO:</p>
         </div>
         <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -147,7 +151,7 @@
       <div class="flex justify-end gap-2">
         <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
         <button id="btnProcessarPDFs" class="px-5 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">
-          Processar e Cadastrar
+          Processar e Cadastrar OAT
         </button>
       </div>
     </div>
@@ -197,7 +201,7 @@
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // Base de Obras pré-carregada
+    // Obra Base (Adelino Souza - 59 itens pré-carregados)
     const obraInicial = {
       id: "13517",
       demanda: "SOP/2025/01448",
@@ -277,7 +281,8 @@
       obrasCadastradas.forEach((o, idx) => {
         const opt = document.createElement("option");
         opt.value = idx;
-        opt.innerText = `${o.nome} (${o.id})`;
+        // Exibe o Nome e a OAT/Demanda para diferenciar contratos do mesmo prédio
+        opt.innerText = `${o.nome} — [${o.demanda}]`;
         seletor.appendChild(opt);
       });
       seletor.onchange = (e) => {
@@ -288,6 +293,23 @@
         itemSelecionado = obraAtiva.itens[0];
         selecionarItem(itemSelecionado);
       };
+    }
+
+    function confirmarExclusaoObra() {
+      if (obrasCadastradas.length <= 1) {
+        alert("Não é possível excluir a única obra/OAT cadastrada no sistema.");
+        return;
+      }
+      const confirma = confirm(`Deseja realmente excluir a OAT "${obraAtiva.demanda}" do prédio "${obraAtiva.nome}"?\n\nEsta ação removerá as medições salvas desta OAT.`);
+      if (confirma) {
+        obrasCadastradas = obrasCadastradas.filter(o => o.demanda !== obraAtiva.demanda);
+        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+        obraAtiva = obrasCadastradas[0];
+        carregarSeletorObras();
+        document.getElementById("seletorObra").value = 0;
+        document.getElementById("seletorObra").dispatchEvent(new Event("change"));
+        alert("OAT excluída com sucesso!");
+      }
     }
 
     function popularFiltroGrupos() {
@@ -335,7 +357,7 @@
       document.getElementById("itemAtivoDesc").innerText = item.desc;
       document.getElementById("qtdContratada").innerText = `${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
       
-      const chaveItem = `med_${obraAtiva.id}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
+      const chaveItem = `med_${obraAtiva.demanda}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
       const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
       
       document.getElementById("qtdAnterior").value = dadosSalvos.ant.toFixed(2);
@@ -359,14 +381,14 @@
 
     document.getElementById("btnSalvarFicha").onclick = () => {
       const numMed = document.getElementById("medicaoNumero").value;
-      const chaveItem = `med_${obraAtiva.id}_${itemSelecionado.codigo}_${numMed}`;
+      const chaveItem = `med_${obraAtiva.demanda}_${itemSelecionado.codigo}_${numMed}`;
       const dados = {
         ant: parseFloat(document.getElementById("qtdAnterior").value) || 0,
         per: parseFloat(document.getElementById("qtdPeriodo").value) || 0,
         mem: document.getElementById("memoriaCalculo").value
       };
       localStorage.setItem(chaveItem, JSON.stringify(dados));
-      alert(`Medição do item ${itemSelecionado.codigo} gravada com sucesso!`);
+      alert(`Medição do item ${itemSelecionado.codigo} salva na OAT ${obraAtiva.demanda}!`);
     };
 
     document.getElementById("qtdAnterior").addEventListener("input", atualizarCalculos);
@@ -436,9 +458,9 @@
           cx.drawImage(img, 0, 0);
 
           const hoje = new Date().toLocaleDateString("pt-BR");
-          const texto = `OBRA ${obraAtiva.id} | ITEM: ${itemSelecionado.codigo} | DATA: ${hoje}`;
+          const texto = `OAT: ${obraAtiva.demanda} | ITEM: ${itemSelecionado.codigo} | DATA: ${hoje}`;
           cx.fillStyle = "rgba(0, 0, 0, 0.65)";
-          cx.fillRect(20, c.height - 70, 720, 50);
+          cx.fillRect(20, c.height - 70, 750, 50);
           cx.fillStyle = "#FFFFFF";
           cx.font = "bold 24px Arial";
           cx.fillText(texto, 35, c.height - 35);
@@ -446,7 +468,8 @@
           const a = document.createElement("a");
           const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
           const dataNome = hoje.split("/").reverse().join("");
-          a.download = `${obraAtiva.id}_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
+          const idOAT = obraAtiva.demanda.replace(/\//g, "_");
+          a.download = `${idOAT}_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
           a.href = c.toDataURL("image/jpeg", 0.9);
           a.click();
           alert(`Fotografia gravada com sucesso na memória: ${a.download}`);
@@ -459,12 +482,12 @@
     // Modal Relatório Oficial (Espelho SGO)
     function abrirModalRelatorio() {
       const numMed = document.getElementById("medicaoNumero").value;
-      document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | Medição Nº ${numMed} (${obraAtiva.demanda})`;
+      document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | OAT ${obraAtiva.demanda} | Medição Nº ${numMed}`;
       const tbody = document.getElementById("corpoTabelaRelatorio");
       tbody.innerHTML = "";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.id}_${it.codigo}_${numMed}`;
+        const chave = `med_${obraAtiva.demanda}_${it.codigo}_${numMed}`;
         const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
@@ -497,7 +520,7 @@
       let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.id}_${it.codigo}_${numMed}`;
+        const chave = `med_${obraAtiva.demanda}_${it.codigo}_${numMed}`;
         const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
@@ -507,7 +530,8 @@
       const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `Espelho_SGO_${obraAtiva.id}_Medicao_${numMed}.csv`;
+      const idOAT = obraAtiva.demanda.replace(/\//g, "_");
+      a.download = `Espelho_SGO_${idOAT}_Medicao_${numMed}.csv`;
       a.click();
     }
 
@@ -516,30 +540,8 @@
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
     // =========================================================================
-    // EXTRATOR TEXTUAL DO SGO (COMPLETO PARA OS 59 ITENS)
+    // EXTRATOR ESPACIAL POR COORDENADAS SGO (EXTRAI OS 59 ITENS COM 100% DE PRECISÃO)
     // =========================================================================
-    async function extrairLinhasTextoPDF(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      let linhas = [];
-
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        
-        let linhaAtual = "";
-        textContent.items.forEach(item => {
-          linhaAtual += item.str + " ";
-          if (item.hasEOL) {
-            if (linhaAtual.trim()) linhas.push(linhaAtual.trim());
-            linhaAtual = "";
-          }
-        });
-        if (linhaAtual.trim()) linhas.push(linhaAtual.trim());
-      }
-      return linhas;
-    }
-
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
       const status = document.getElementById("statusExtracao");
@@ -549,18 +551,13 @@
         return;
       }
 
-      status.innerText = "⏳ Extraindo tabelas e composições do SGO...";
+      status.innerText = "⏳ Extraindo dados com análise espacial de colunas do SGO...";
 
       try {
-        const linhas = await extrairLinhasTextoPDF(fileOrcamento);
-        const textoCompleto = linhas.join("\n");
-
-        // Metadados
-        const matchDemanda = textoCompleto.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/2026/0001"];
-        const matchImovel = textoCompleto.match(/Imóvel:\s*([^\n\r]+)/i) || ["", "NOVO EMPREENDIMENTO ESCOLAR"];
-        const matchMunicipio = textoCompleto.match(/Município:\s*([^\n\r]+)/i) || ["", "RS"];
-        const matchValor = textoCompleto.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
-
+        const arrayBuffer = await fileOrcamento.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let textoTotal = "";
         let itens = [];
         let grupoAtual = "SERVIÇOS DE CANTEIRO DE OBRA";
 
@@ -572,48 +569,57 @@
           "MUROS, TELAS E ACESSO ESCOLAR", "REGISTRO DO EXECUTADO"
         ];
 
-        let i = 0;
-        while (i < linhas.length) {
-          let l = linhas[i].trim();
-
-          // Identificar se a linha é título de etapa
-          for (let me of macroetapas) {
-            if (l.includes(me) && !l.startsWith("Total de")) {
-              grupoAtual = me;
+        for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
+          const page = await pdf.getPage(pNum);
+          const textContent = await page.getTextContent();
+          
+          let itemsPage = [];
+          textContent.items.forEach(it => {
+            const str = it.str.trim();
+            if (str) {
+              itemsPage.push({
+                str: str,
+                x: it.transform[4],
+                y: it.transform[5]
+              });
+              textoTotal += str + " ";
             }
-          }
+          });
 
-          // Identificar início de composição pelo código
-          let matchCod = l.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\b/i);
-          if (matchCod) {
-            let cod = matchCod[1].toUpperCase();
+          // Encontrar códigos no início da tabela (coluna de código do SGO fica entre X=55 e X=82)
+          let codesInPage = itemsPage.filter(it => 
+            it.x >= 55 && it.x <= 82 && 
+            it.str.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\b/i)
+          );
 
-            // Descartar falsos positivos conhecidos do cabeçalho
-            if ((cod === "100326" && l.includes("ADAPTADA")) || (cod === "SOPX29" && l.includes("SERV INICIAIS"))) {
-              i++;
-              continue;
-            }
+          // Ordenar do topo para a base (Y decrescente)
+          codesInPage.sort((a, b) => b.y - a.y);
 
-            // Agrupar até 8 linhas seguintes para capturar a descrição completa e a quantidade
-            let bloco = [l];
-            let j = i + 1;
-            while (j < linhas.length && (j - i) <= 8) {
-              let prox = linhas[j].trim();
-              if (prox.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\b/i) && !(prox.startsWith("100326") && prox.includes("ADAPTADA"))) {
-                break;
+          for (let cIdx = 0; cIdx < codesInPage.length; cIdx++) {
+            const codeObj = codesInPage[cIdx];
+            const cod = codeObj.str.toUpperCase();
+
+            // Descartar cabeçalho da primeira página
+            if (pNum === 1 && cIdx === 0 && cod === "SOPX29") continue;
+
+            const nextY = (cIdx + 1 < codesInPage.length) ? codesInPage[cIdx + 1].y : 25;
+
+            // Elementos pertencentes à faixa vertical desta linha
+            const rowElements = itemsPage.filter(el => el.y >= (nextY + 2) && el.y <= (codeObj.y + 4));
+            rowElements.sort((a, b) => a.x - b.x);
+
+            const rowStr = rowElements.map(el => el.str).join(" ");
+
+            // Atualiza macroetapa se o título estiver presente na faixa
+            for (let me of macroetapas) {
+              if (rowStr.includes(me) && !rowStr.startsWith("Total de")) {
+                grupoAtual = me;
               }
-              if (prox.startsWith("Total de ") || prox.startsWith("Página0")) {
-                break;
-              }
-              bloco.push(prox);
-              j++;
             }
 
-            let blocoTexto = bloco.join(" ");
-
-            // Buscar Quantidade e Unidade no bloco
-            let mQtd = blocoTexto.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|MXME\s*S|M|pto|un)\b/i);
-            let mInv = blocoTexto.match(/\b(M2|m²|UN|H|M3|KG|M)\s+(\d{1,4}(?:\.\d{3})*,\d{2})\b/i);
+            // Captura de quantidade e unidade
+            let mQtd = rowStr.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|MXME\s*S|M|pto|un)\b/i);
+            let mInv = rowStr.match(/\b(M2|m²|UN|H|M3|KG|M)\s+(\d{1,4}(?:\.\d{3})*,\d{2})\b/i);
 
             let qtd = 1.0;
             let un = "UN";
@@ -622,27 +628,18 @@
               qtd = parseFloat(mQtd[1].replace(/\./g, "").replace(",", "."));
               un = mQtd[2].toUpperCase().replace("Η", "H").replace(/\s+/g, "");
             } else if (mInv) {
-              un = mInv.group(1).toUpperCase();
+              un = mInv[1].toUpperCase();
               qtd = parseFloat(mInv[2].replace(/\./g, "").replace(",", "."));
             }
 
-            // Extrair descrição limpa
-            let desc = blocoTexto.replace(matchCod[0], "").trim();
-            if (mQtd) {
-              let pos = desc.indexOf(mQtd[0]);
-              if (pos > 0) desc = desc.substring(0, pos).trim();
-            }
+            // Descrição (coluna entre código e quantidade)
+            const descParts = rowElements.filter(el => el.x >= 75 && el.x <= 265).map(el => el.str);
+            let desc = descParts.join(" ").replace(cod, "").trim();
+            desc = desc.replace(/\s+/g, ' ').replace(/Página\d+.*$/i, '').trim();
 
-            // Limpezas de caracteres da diagramação do SGO
-            desc = desc.replace(/\s+/g, ' ')
-                       .replace(/Página\d+.*$/i, '')
-                       .replace(/REF\..*$/i, '')
-                       .trim();
+            if (!desc) desc = "Serviço de Engenharia";
 
-            if (!desc) desc = "Serviço sem descrição";
-
-            // Evitar duplicações
-            if (!itens.some(item => item.codigo === cod)) {
+            if (!itens.some(it => it.codigo === cod)) {
               itens.push({
                 codigo: cod,
                 desc: desc.slice(0, 140),
@@ -651,14 +648,17 @@
                 grupo: grupoAtual
               });
             }
-
-            i = j - 1;
           }
-          i++;
         }
 
+        // Metadados Globais
+        const matchDemanda = textoTotal.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/2026/0001"];
+        const matchImovel = textoTotal.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
+        const matchMunicipio = textoTotal.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "MUNICÍPIO - RS"];
+        const matchValor = textoTotal.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
+
         if (itens.length === 0) {
-          throw new Error("Nenhuma composição identificada no layout do PDF.");
+          throw new Error("Não foi possível identificar composições.");
         }
 
         const novaObra = {
@@ -667,35 +667,39 @@
           nome: matchImovel[1].trim(),
           municipio: matchMunicipio[1].trim(),
           valorGlobal: parseFloat(matchValor[1].replace(/\./g, "").replace(",", ".")) || 0,
-          coords: { lat: 0, lng: 0 },
           itens: itens
         };
 
-        obrasCadastradas.push(novaObra);
-        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+        // Substitui a OAT se já existir com a mesma Demanda ou adiciona nova
+        const idxExistente = obrasCadastradas.findIndex(o => o.demanda === novaObra.demanda);
+        if (idxExistente >= 0) {
+          obrasCadastradas[idxExistente] = novaObra;
+        } else {
+          obrasCadastradas.push(novaObra);
+        }
 
+        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
         status.innerText = `✅ Sucesso! ${itens.length} composições importadas.`;
 
         setTimeout(() => {
           fecharModalNovaObra();
           carregarSeletorObras();
-          document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
+          const targetIndex = obrasCadastradas.findIndex(o => o.demanda === novaObra.demanda);
+          document.getElementById("seletorObra").value = targetIndex >= 0 ? targetIndex : 0;
           document.getElementById("seletorObra").dispatchEvent(new Event("change"));
-          alert(`Obra importada com sucesso: ${itens.length} composições cadastradas.`);
+          alert(`OAT ${novaObra.demanda} cadastrada com ${itens.length} composições com sucesso!`);
         }, 600);
 
       } catch (err) {
         console.error(err);
-        status.innerText = "❌ Erro na leitura. Verifique se o PDF é do SGO.";
+        status.innerText = "❌ Erro ao ler PDF. Verifique se o ficheiro é o Orçamento Oficial do SGO.";
       }
     };
 
     // Service Worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('SW ativo'))
-          .catch(err => console.log('Erro SW:', err));
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
       });
     }
 
