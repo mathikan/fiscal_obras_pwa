@@ -12,18 +12,25 @@
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- CABEÇALHO COM CONTROLO DE OATs E OBRAS -->
+  <!-- CABEÇALHO COM CONTROLO DE OATs, LIXEIRA E GPS -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
         <div class="flex items-center gap-2 mt-0.5">
           <!-- Seletor de Contratos / OATs -->
-          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-xs md:text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer max-w-[320px] md:max-w-md truncate">
+          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-xs md:text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer max-w-[300px] md:max-w-md truncate">
           </select>
           <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
-          <button onclick="confirmarExclusaoObra()" title="Excluir esta OAT/Obra" class="text-xs bg-red-800/80 hover:bg-red-700 text-red-200 px-2 py-1 rounded transition">
+          
+          <!-- Botão Mover para Lixeira -->
+          <button onclick="moverObraParaLixeira()" title="Mover esta OAT para a Lixeira" class="text-xs bg-red-800/80 hover:bg-red-700 text-red-200 px-2 py-1 rounded transition flex items-center gap-1">
             🗑️ Excluir OAT
+          </button>
+          
+          <!-- Botão Abrir Lixeira -->
+          <button onclick="abrirModalLixeira()" title="Ver OATs Excluídas" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1 font-semibold">
+            ♻️ Lixeira (<span id="contagemLixeira">0</span>)
           </button>
         </div>
       </div>
@@ -132,7 +139,7 @@
       <div class="flex justify-between items-start mb-3">
         <div>
           <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT / Obra</h3>
-          <p class="text-xs text-slate-500">Selecione o PDF do Orçamento Oficial gerado pelo SGO:</p>
+          <p class="text-xs text-slate-500">Selecione o PDF do Orçamento Oficial do SGO (SOP/RS):</p>
         </div>
         <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -152,6 +159,34 @@
         <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
         <button id="btnProcessarPDFs" class="px-5 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">
           Processar e Cadastrar OAT
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LIXEIRA DE OATs (Permite Restaurar ou Apagar Definitivamente) -->
+  <div id="modalLixeira" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[80vh]">
+      <div class="flex justify-between items-center border-b pb-3 mb-3">
+        <div>
+          <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <span>♻️ Lixeira de OATs / Obras</span>
+          </h3>
+          <p class="text-xs text-slate-500">Obras movidas para a lixeira podem ser recuperadas a qualquer momento.</p>
+        </div>
+        <button onclick="fecharModalLixeira()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div id="listaLixeira" class="flex-1 overflow-y-auto space-y-2 pr-1">
+        <!-- Itens da lixeira injetados dinamicamente -->
+      </div>
+
+      <div class="flex justify-between items-center border-t pt-3 mt-3">
+        <button onclick="esvaziarLixeiraDefinitivamente()" class="text-xs text-red-600 hover:text-red-800 font-semibold">
+          Esvaziar Lixeira Definitivamente
+        </button>
+        <button onclick="fecharModalLixeira()" class="px-4 py-1.5 text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg">
+          Fechar
         </button>
       </div>
     </div>
@@ -201,8 +236,9 @@
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // Obra Base (Adelino Souza - 59 itens pré-carregados)
+    // Obra Base Completa (Demanda SOP/2025/01448 com UID seguro)
     const obraInicial = {
+      uid: "oat_base_adelino_01448",
       id: "13517",
       demanda: "SOP/2025/01448",
       nome: "E.E.E.F. PROFESSOR ADELINO SOUZA",
@@ -271,9 +307,26 @@
       ]
     };
 
-    let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [obraInicial];
+    // Inicialização do Armazenamento com UIDs Únicos
+    let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [];
+    if (obrasCadastradas.length === 0) {
+      obrasCadastradas = [obraInicial];
+      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+    } else {
+      // Garante que cada obra existente tenha um UID único
+      obrasCadastradas.forEach((o, i) => {
+        if (!o.uid) o.uid = "oat_" + Date.now() + "_" + i;
+      });
+      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+    }
+
+    let lixeiraObras = JSON.parse(localStorage.getItem("lixeira_obras_sop")) || [];
     let obraAtiva = obrasCadastradas[0];
     let itemSelecionado = obraAtiva.itens[23] || obraAtiva.itens[0];
+
+    function atualizarContagemLixeira() {
+      document.getElementById("contagemLixeira").innerText = lixeiraObras.length;
+    }
 
     function carregarSeletorObras() {
       const seletor = document.getElementById("seletorObra");
@@ -281,7 +334,6 @@
       obrasCadastradas.forEach((o, idx) => {
         const opt = document.createElement("option");
         opt.value = idx;
-        // Exibe o Nome e a OAT/Demanda para diferenciar contratos do mesmo prédio
         opt.innerText = `${o.nome} — [${o.demanda}]`;
         seletor.appendChild(opt);
       });
@@ -293,22 +345,97 @@
         itemSelecionado = obraAtiva.itens[0];
         selecionarItem(itemSelecionado);
       };
+      atualizarContagemLixeira();
     }
 
-    function confirmarExclusaoObra() {
+    // =========================================================================
+    // GESTÃO DA LIXEIRA (MOVER, RESTAURAR E ESVAZIAR)
+    // =========================================================================
+    function moverObraParaLixeira() {
       if (obrasCadastradas.length <= 1) {
-        alert("Não é possível excluir a única obra/OAT cadastrada no sistema.");
+        alert("Atenção: Não é possível mover a única OAT ativa para a lixeira. Cadastre outra antes.");
         return;
       }
-      const confirma = confirm(`Deseja realmente excluir a OAT "${obraAtiva.demanda}" do prédio "${obraAtiva.nome}"?\n\nEsta ação removerá as medições salvas desta OAT.`);
+
+      const confirma = confirm(`Deseja mover a OAT "${obraAtiva.demanda}" (${obraAtiva.nome}) para a lixeira?\n\nEla poderá ser restaurada a qualquer momento.`);
+      if (!confirma) return;
+
+      // Adiciona à lixeira com data de exclusão
+      const obraParaExcluir = { ...obraAtiva, dataExclusao: new Date().toLocaleDateString("pt-BR") };
+      lixeiraObras.push(obraParaExcluir);
+      localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
+
+      // Remove apenas a obra com aquele UID exato
+      obrasCadastradas = obrasCadastradas.filter(o => o.uid !== obraAtiva.uid);
+      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+
+      obraAtiva = obrasCadastradas[0];
+      carregarSeletorObras();
+      document.getElementById("seletorObra").value = 0;
+      document.getElementById("seletorObra").dispatchEvent(new Event("change"));
+
+      alert("OAT movida para a lixeira com sucesso!");
+    }
+
+    function abrirModalLixeira() {
+      const lista = document.getElementById("listaLixeira");
+      lista.innerHTML = "";
+
+      if (lixeiraObras.length === 0) {
+        lista.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">A lixeira está vazia.</p>`;
+      } else {
+        lixeiraObras.forEach((o, idx) => {
+          const div = document.createElement("div");
+          div.className = "flex justify-between items-center p-3 bg-slate-50 border rounded-lg text-xs";
+          div.innerHTML = `
+            <div>
+              <span class="font-bold text-slate-800 block">${o.nome}</span>
+              <span class="text-blue-900 font-mono font-semibold">${o.demanda}</span>
+              <span class="text-slate-400 text-[10px] ml-2">(${o.itens.length} itens) • Excluído em: ${o.dataExclusao || 'Recente'}</span>
+            </div>
+            <button onclick="restaurarObraDaLixeira('${o.uid}')" class="bg-blue-800 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded shadow text-xs">
+              Restaurar
+            </button>
+          `;
+          lista.appendChild(div);
+        });
+      }
+
+      document.getElementById("modalLixeira").classList.remove("hidden");
+    }
+
+    function fecharModalLixeira() {
+      document.getElementById("modalLixeira").classList.add("hidden");
+    }
+
+    function restaurarObraDaLixeira(uid) {
+      const idx = lixeiraObras.findIndex(o => o.uid === uid);
+      if (idx < 0) return;
+
+      const obraRestaurada = lixeiraObras.splice(idx, 1)[0];
+      delete obraRestaurada.dataExclusao;
+
+      obrasCadastradas.push(obraRestaurada);
+      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+      localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
+
+      fecharModalLixeira();
+      carregarSeletorObras();
+      document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
+      document.getElementById("seletorObra").dispatchEvent(new Event("change"));
+
+      alert(`OAT ${obraRestaurada.demanda} restaurada com sucesso!`);
+    }
+
+    function esvaziarLixeiraDefinitivamente() {
+      if (lixeiraObras.length === 0) return;
+      const confirma = confirm("Deseja apagar PERMANENTEMENTE todos os itens da lixeira? Esta ação não pode ser desfeita.");
       if (confirma) {
-        obrasCadastradas = obrasCadastradas.filter(o => o.demanda !== obraAtiva.demanda);
-        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-        obraAtiva = obrasCadastradas[0];
-        carregarSeletorObras();
-        document.getElementById("seletorObra").value = 0;
-        document.getElementById("seletorObra").dispatchEvent(new Event("change"));
-        alert("OAT excluída com sucesso!");
+        lixeiraObras = [];
+        localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
+        fecharModalLixeira();
+        atualizarContagemLixeira();
+        alert("Lixeira esvaziada.");
       }
     }
 
@@ -357,7 +484,7 @@
       document.getElementById("itemAtivoDesc").innerText = item.desc;
       document.getElementById("qtdContratada").innerText = `${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
       
-      const chaveItem = `med_${obraAtiva.demanda}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
+      const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
       const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
       
       document.getElementById("qtdAnterior").value = dadosSalvos.ant.toFixed(2);
@@ -381,14 +508,14 @@
 
     document.getElementById("btnSalvarFicha").onclick = () => {
       const numMed = document.getElementById("medicaoNumero").value;
-      const chaveItem = `med_${obraAtiva.demanda}_${itemSelecionado.codigo}_${numMed}`;
+      const chaveItem = `med_${obraAtiva.uid}_${itemSelecionado.codigo}_${numMed}`;
       const dados = {
         ant: parseFloat(document.getElementById("qtdAnterior").value) || 0,
         per: parseFloat(document.getElementById("qtdPeriodo").value) || 0,
         mem: document.getElementById("memoriaCalculo").value
       };
       localStorage.setItem(chaveItem, JSON.stringify(dados));
-      alert(`Medição do item ${itemSelecionado.codigo} salva na OAT ${obraAtiva.demanda}!`);
+      alert(`Medição do item ${itemSelecionado.codigo} salva com sucesso!`);
     };
 
     document.getElementById("qtdAnterior").addEventListener("input", atualizarCalculos);
@@ -468,7 +595,7 @@
           const a = document.createElement("a");
           const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
           const dataNome = hoje.split("/").reverse().join("");
-          const idOAT = obraAtiva.demanda.replace(/\//g, "_");
+          const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
           a.download = `${idOAT}_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
           a.href = c.toDataURL("image/jpeg", 0.9);
           a.click();
@@ -479,7 +606,7 @@
       reader.readAsDataURL(file);
     });
 
-    // Modal Relatório Oficial (Espelho SGO)
+    // Relatório Oficial Espelho SGO
     function abrirModalRelatorio() {
       const numMed = document.getElementById("medicaoNumero").value;
       document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | OAT ${obraAtiva.demanda} | Medição Nº ${numMed}`;
@@ -487,7 +614,7 @@
       tbody.innerHTML = "";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.demanda}_${it.codigo}_${numMed}`;
+        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
         const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
@@ -520,7 +647,7 @@
       let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.demanda}_${it.codigo}_${numMed}`;
+        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
         const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
@@ -530,17 +657,16 @@
       const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      const idOAT = obraAtiva.demanda.replace(/\//g, "_");
+      const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
       a.download = `Espelho_SGO_${idOAT}_Medicao_${numMed}.csv`;
       a.click();
     }
 
-    // Modal Nova Obra
     function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
     // =========================================================================
-    // EXTRATOR ESPACIAL POR COORDENADAS SGO (EXTRAI OS 59 ITENS COM 100% DE PRECISÃO)
+    // EXTRATOR REFORMULADO POR BLOCOS CONTÍNUOS SGO (EXTRAI TODAS AS 59 COMPOSIÇÕES)
     // =========================================================================
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
@@ -551,13 +677,47 @@
         return;
       }
 
-      status.innerText = "⏳ Extraindo dados com análise espacial de colunas do SGO...";
+      status.innerText = "⏳ Extraindo dados do SGO...";
 
       try {
         const arrayBuffer = await fileOrcamento.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         
         let textoTotal = "";
+        let todasLinhas = [];
+
+        // Concatena as linhas de texto do PDF
+        for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
+          const page = await pdf.getPage(pNum);
+          const textContent = await page.getTextContent();
+          
+          let pageLines = [];
+          let currentLine = "";
+          let lastY = null;
+
+          textContent.items.forEach(it => {
+            const str = it.str;
+            const y = Math.round(it.transform[5]);
+            textoTotal += str + " ";
+
+            if (lastY === null || Math.abs(y - lastY) <= 3) {
+              currentLine += " " + str;
+            } else {
+              if (currentLine.trim()) pageLines.push(currentLine.trim());
+              currentLine = str;
+            }
+            lastY = y;
+          });
+          if (currentLine.trim()) pageLines.push(currentLine.trim());
+          todasLinhas.push(...pageLines);
+        }
+
+        // Metadados da Capa
+        const matchDemanda = textoTotal.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/" + new Date().getFullYear() + "/001"];
+        const matchImovel = textoTotal.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
+        const matchMunicipio = textoTotal.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "RS"];
+        const matchValor = textoTotal.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
+
         let itens = [];
         let grupoAtual = "SERVIÇOS DE CANTEIRO DE OBRA";
 
@@ -569,73 +729,74 @@
           "MUROS, TELAS E ACESSO ESCOLAR", "REGISTRO DO EXECUTADO"
         ];
 
-        for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
-          const page = await pdf.getPage(pNum);
-          const textContent = await page.getTextContent();
-          
-          let itemsPage = [];
-          textContent.items.forEach(it => {
-            const str = it.str.trim();
-            if (str) {
-              itemsPage.push({
-                str: str,
-                x: it.transform[4],
-                y: it.transform[5]
-              });
-              textoTotal += str + " ";
+        let i = 0;
+        while (i < todasLinhas.length) {
+          let linha = todasLinhas[i].trim();
+
+          // Identifica títulos de macroetapas
+          for (let me of macroetapas) {
+            if (linha.includes(me) && !linha.startsWith("Total de")) {
+              grupoAtual = me;
             }
-          });
+          }
 
-          // Encontrar códigos no início da tabela (coluna de código do SGO fica entre X=55 e X=82)
-          let codesInPage = itemsPage.filter(it => 
-            it.x >= 55 && it.x <= 82 && 
-            it.str.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\b/i)
-          );
+          // Identifica código de composição no início da linha
+          let matchCod = linha.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\s+(.*)/i);
+          if (matchCod) {
+            let cod = matchCod[1].toUpperCase();
+            let resto = matchCod[2].trim();
 
-          // Ordenar do topo para a base (Y decrescente)
-          codesInPage.sort((a, b) => b.y - a.y);
+            // Descartar falsos positivos
+            if ((cod === "100326" && resto.includes("ADAPTADA")) || 
+                (cod === "SOPX29" && resto.includes("SERV INICIAIS")) ||
+                (cod === "160386")) {
+              i++;
+              continue;
+            }
 
-          for (let cIdx = 0; cIdx < codesInPage.length; cIdx++) {
-            const codeObj = codesInPage[cIdx];
-            const cod = codeObj.str.toUpperCase();
-
-            // Descartar cabeçalho da primeira página
-            if (pNum === 1 && cIdx === 0 && cod === "SOPX29") continue;
-
-            const nextY = (cIdx + 1 < codesInPage.length) ? codesInPage[cIdx + 1].y : 25;
-
-            // Elementos pertencentes à faixa vertical desta linha
-            const rowElements = itemsPage.filter(el => el.y >= (nextY + 2) && el.y <= (codeObj.y + 4));
-            rowElements.sort((a, b) => a.x - b.x);
-
-            const rowStr = rowElements.map(el => el.str).join(" ");
-
-            // Atualiza macroetapa se o título estiver presente na faixa
-            for (let me of macroetapas) {
-              if (rowStr.includes(me) && !rowStr.startsWith("Total de")) {
-                grupoAtual = me;
+            // Agrupar linhas até o próximo item
+            let bloco = [resto];
+            let j = i + 1;
+            while (j < todasLinhas.length && (j - i) <= 10) {
+              let prox = todasLinhas[j].trim();
+              if (prox.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\s+/i) && 
+                  !(prox.startsWith("100326") && prox.includes("ADAPTADA")) &&
+                  !prox.startsWith("160386")) {
+                break;
               }
+              if (prox.startsWith("Total de") || prox.startsWith("Página0")) {
+                break;
+              }
+              bloco.push(prox);
+              j++;
             }
 
-            // Captura de quantidade e unidade
-            let mQtd = rowStr.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|MXME\s*S|M|pto|un)\b/i);
-            let mInv = rowStr.match(/\b(M2|m²|UN|H|M3|KG|M)\s+(\d{1,4}(?:\.\d{3})*,\d{2})\b/i);
+            let blocoTexto = bloco.join(" ");
+
+            // Busca quantidade e unidade
+            let mQtd = blocoTexto.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|MXME\s*S|M|pto|un)\b/i);
+            let mInv = blocoTexto.match(/\b(M2|m²|UN|H|M3|KG|M)\s+(\d{1,4}(?:\.\d{3})*,\d{2})\b/i);
 
             let qtd = 1.0;
             let un = "UN";
+            let desc = blocoTexto;
 
             if (mQtd) {
               qtd = parseFloat(mQtd[1].replace(/\./g, "").replace(",", "."));
               un = mQtd[2].toUpperCase().replace("Η", "H").replace(/\s+/g, "");
+              let cut = blocoTexto.indexOf(mQtd[0]);
+              if (cut > 0) desc = blocoTexto.substring(0, cut).trim();
             } else if (mInv) {
-              un = mInv[1].toUpperCase();
               qtd = parseFloat(mInv[2].replace(/\./g, "").replace(",", "."));
+              un = mInv[1].toUpperCase();
+              let cut = blocoTexto.indexOf(mInv[0]);
+              if (cut > 0) desc = blocoTexto.substring(0, cut).trim();
             }
 
-            // Descrição (coluna entre código e quantidade)
-            const descParts = rowElements.filter(el => el.x >= 75 && el.x <= 265).map(el => el.str);
-            let desc = descParts.join(" ").replace(cod, "").trim();
-            desc = desc.replace(/\s+/g, ' ').replace(/Página\d+.*$/i, '').trim();
+            desc = desc.replace(/\(REF\..*?\)/gi, "")
+                       .replace(/AF_\d{2}\/\d{4}/gi, "")
+                       .replace(/\s+/g, " ")
+                       .trim();
 
             if (!desc) desc = "Serviço de Engenharia";
 
@@ -648,20 +809,19 @@
                 grupo: grupoAtual
               });
             }
-          }
-        }
 
-        // Metadados Globais
-        const matchDemanda = textoTotal.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/2026/0001"];
-        const matchImovel = textoTotal.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
-        const matchMunicipio = textoTotal.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "MUNICÍPIO - RS"];
-        const matchValor = textoTotal.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
+            i = j - 1;
+          }
+          i++;
+        }
 
         if (itens.length === 0) {
-          throw new Error("Não foi possível identificar composições.");
+          throw new Error("Não foi possível extrair composições deste PDF.");
         }
 
+        // Cria a nova OAT com UID único e data
         const novaObra = {
+          uid: "oat_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
           id: matchDemanda[1].split("/").pop() || Date.now().toString().slice(-4),
           demanda: matchDemanda[1].trim(),
           nome: matchImovel[1].trim(),
@@ -670,22 +830,15 @@
           itens: itens
         };
 
-        // Substitui a OAT se já existir com a mesma Demanda ou adiciona nova
-        const idxExistente = obrasCadastradas.findIndex(o => o.demanda === novaObra.demanda);
-        if (idxExistente >= 0) {
-          obrasCadastradas[idxExistente] = novaObra;
-        } else {
-          obrasCadastradas.push(novaObra);
-        }
-
+        obrasCadastradas.push(novaObra);
         localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+
         status.innerText = `✅ Sucesso! ${itens.length} composições importadas.`;
 
         setTimeout(() => {
           fecharModalNovaObra();
           carregarSeletorObras();
-          const targetIndex = obrasCadastradas.findIndex(o => o.demanda === novaObra.demanda);
-          document.getElementById("seletorObra").value = targetIndex >= 0 ? targetIndex : 0;
+          document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
           document.getElementById("seletorObra").dispatchEvent(new Event("change"));
           alert(`OAT ${novaObra.demanda} cadastrada com ${itens.length} composições com sucesso!`);
         }, 600);
@@ -719,7 +872,7 @@
     setTimeout(() => {
       carregarSeletorObras();
       popularFiltroGrupos();
-      selecionarItem(obraAtiva.itens[23]);
+      selecionarItem(obraAtiva.itens[23] || obraAtiva.itens[0]);
       resizeCanvas();
     }, 150);
   </script>
