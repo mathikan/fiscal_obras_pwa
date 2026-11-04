@@ -1,11 +1,14 @@
-const CACHE_NAME = 'fiscal-sop-v3';
+const CACHE_NAME = 'fiscal-sop-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './sgo-parser.js',
+  './caderno-pdf.js',
   './manifest.json',
   'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'
 ];
 
 self.addEventListener('install', (event) => {
