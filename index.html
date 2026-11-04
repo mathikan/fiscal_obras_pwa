@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- PDF.js via CDN Oficial -->
+  <!-- PDF.js via CDN Oficial sem worker externo -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-  <!-- Módulo Extrator de PDF desacoplado -->
+  <!-- jsPDF e AutoTable para geração do Caderno Oficial -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <!-- Módulos Especialistas Desacoplados -->
   <script src="sgo-parser.js"></script>
+  <script src="caderno-pdf.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- CABEÇALHO COM CONTROLO DE OATs, LIXEIRA E GPS -->
+  <!-- CABEÇALHO INSTITUCIONAL -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
     <div class="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
@@ -35,6 +39,9 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button id="btnCadernoPDF" onclick="dispararGeracaoCaderno()" class="hidden bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          📑 Caderno PDF
+        </button>
         <button id="btnEspelhoSGO" onclick="abrirModalRelatorio()" class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           📊 Espelho SGO
         </button>
@@ -111,7 +118,7 @@
           <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
             <span>♻️ Lixeira de OATs / Obras</span>
           </h3>
-          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições salvas.</p>
+          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições intactas.</p>
         </div>
         <button onclick="fecharModalLixeira()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -180,6 +187,7 @@
     let lixeiraObras = JSON.parse(localStorage.getItem("lixeira_obras_sop")) || [];
     let obraAtiva = obrasCadastradas.length > 0 ? obrasCadastradas[0] : null;
     let codigoItemAberto = null;
+    let canvasesAtivos = {};
 
     function atualizarContagemLixeira() {
       document.getElementById("contagemLixeira").innerText = lixeiraObras.length;
@@ -189,6 +197,7 @@
       const seletor = document.getElementById("seletorObra");
       const btnExcluir = document.getElementById("btnExcluirOAT");
       const btnEspelho = document.getElementById("btnEspelhoSGO");
+      const btnCaderno = document.getElementById("btnCadernoPDF");
       const barraControles = document.getElementById("barraControles");
       const demandaBadge = document.getElementById("demandaBadge");
 
@@ -199,6 +208,7 @@
         demandaBadge.innerText = "---";
         btnExcluir.classList.add("hidden");
         btnEspelho.classList.add("hidden");
+        btnCaderno.classList.add("hidden");
         barraControles.classList.add("hidden");
         const opt = document.createElement("option");
         opt.value = "";
@@ -211,6 +221,7 @@
 
       btnExcluir.classList.remove("hidden");
       btnEspelho.classList.remove("hidden");
+      btnCaderno.classList.remove("hidden");
       barraControles.classList.remove("hidden");
 
       if (!obraAtiva || !obrasCadastradas.some(o => o.uid === obraAtiva.uid)) {
@@ -299,6 +310,9 @@
         const acum = dadosSalvos.ant + dadosSalvos.per;
         const saldo = item.qtd - acum;
 
+        const chaveFoto = `foto_${obraAtiva.uid}_${item.codigo}_${numMed}`;
+        const fotoSalva = localStorage.getItem(chaveFoto);
+
         const itemWrapper = document.createElement("div");
         itemWrapper.className = `rounded-xl border transition shadow-sm overflow-hidden ${isAberto ? 'border-blue-700 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}`;
 
@@ -312,6 +326,7 @@
               <span class="font-bold text-xs px-2 py-0.5 rounded ${isAberto ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}">${item.codigo}</span>
               <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">${item.grupo}</span>
               ${dadosSalvos.per > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">Medido no Período</span>' : ''}
+              ${fotoSalva ? '<span class="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded">📷 Foto Anexada</span>' : ''}
             </div>
             <p class="text-xs font-semibold text-slate-800 leading-snug">${item.desc}</p>
           </div>
@@ -354,11 +369,12 @@
               <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo: Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
             </div>
 
+            <!-- Área de Croquis Cotado -->
             <div class="border border-blue-900 rounded-lg overflow-hidden bg-white shadow-inner">
               <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
                 <span class="font-bold text-blue-900 text-[11px]">Área de Desenho Cotado e Esquemas Gráficos</span>
                 <div class="flex gap-2">
-                  <button onclick="limparCanvasAtivo('${item.codigo}')" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar</button>
+                  <button onclick="limparCanvasAtivo('${item.codigo}')" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar Croqui</button>
                   <label class="text-[11px] bg-blue-700 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1 font-bold">
                     📷 Tirar Foto (Data)
                     <input type="file" accept="image/*" capture="environment" class="hidden" onchange="capturarFotoInline(event, '${item.codigo}')">
@@ -369,7 +385,7 @@
             </div>
 
             <div class="flex justify-between items-center pt-2">
-              <span class="text-[10px] text-slate-400">Gravado localmente na memória</span>
+              <span id="statusFoto_${item.codigo}" class="text-[10px] text-slate-500 font-semibold">${fotoSalva ? '✅ Foto de campo anexada para o Caderno PDF' : 'Nenhuma foto anexada ainda'}</span>
               <button onclick="salvarMedicaoInline('${item.codigo}')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow text-xs flex items-center gap-1 transition">
                 💾 Salvar Medição do Item
               </button>
@@ -427,14 +443,22 @@
         per: parseFloat(inPer.value) || 0,
         mem: inMem.value || ""
       };
-
       localStorage.setItem(chaveItem, JSON.stringify(dados));
+
+      // Salva o traçado do canvas em Base64
+      const canvasEl = document.getElementById(`canvas_${codigo}`);
+      if (canvasEl) {
+        const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
+        localStorage.setItem(chaveCroqui, canvasEl.toDataURL("image/png"));
+      }
+
       alert(`Medição do item ${codigo} salva com sucesso!`);
       renderizarLista();
     }
 
-    let canvasesAtivos = {};
-
+    // =========================================================================
+    // CANVAS DE CROQUIS TOUCH / STYLUS
+    // =========================================================================
     function inicializarCanvasInline(codigo) {
       const canvas = document.getElementById(`canvas_${codigo}`);
       if (!canvas) return;
@@ -443,6 +467,16 @@
       canvas.height = 288;
       const ctx = canvas.getContext("2d");
       let desenhando = false;
+
+      // Restaura o traçado salvo anteriormente se existir
+      const numMed = document.getElementById("medicaoNumero").value;
+      const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
+      const croquiSalvo = localStorage.getItem(chaveCroqui);
+      if (croquiSalvo) {
+        const img = new Image();
+        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.src = croquiSalvo;
+      }
 
       function startDraw(e) {
         desenhando = true;
@@ -482,6 +516,9 @@
       if (canvasesAtivos[codigo]) {
         const { canvas, ctx } = canvasesAtivos[codigo];
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const numMed = document.getElementById("medicaoNumero").value;
+        const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
+        localStorage.removeItem(chaveCroqui);
       }
     }
 
@@ -494,33 +531,64 @@
         const img = new Image();
         img.onload = function() {
           const c = document.createElement("canvas");
-          c.width = img.width;
-          c.height = img.height;
+          const maxDim = 1280;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = (h * maxDim) / w; w = maxDim; }
+            else { w = (w * maxDim) / h; h = maxDim; }
+          }
+          c.width = w;
+          c.height = h;
           const cx = c.getContext("2d");
-          cx.drawImage(img, 0, 0);
+          cx.drawImage(img, 0, 0, w, h);
 
+          // Estampa da Data no Rodapé
           const hoje = new Date().toLocaleDateString("pt-BR");
           const texto = `OAT: ${obraAtiva.demanda} | ITEM: ${codigo} | DATA: ${hoje}`;
           cx.fillStyle = "rgba(0, 0, 0, 0.65)";
-          cx.fillRect(20, c.height - 70, 750, 50);
+          cx.fillRect(15, c.height - 50, 700, 40);
           cx.fillStyle = "#FFFFFF";
-          cx.font = "bold 24px Arial";
-          cx.fillText(texto, 35, c.height - 35);
+          cx.font = "bold 20px Arial";
+          cx.fillText(texto, 25, c.height - 22);
 
+          const jpegBase64 = c.toDataURL("image/jpeg", 0.85);
+
+          // Persiste no LocalStorage para o Caderno PDF
+          const numMed = document.getElementById("medicaoNumero").value;
+          const chaveFoto = `foto_${obraAtiva.uid}_${codigo}_${numMed}`;
+          localStorage.setItem(chaveFoto, jpegBase64);
+
+          // Dispara o download nativo para a galeria
           const a = document.createElement("a");
-          const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
           const dataNome = hoje.split("/").reverse().join("");
           const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-          a.download = `${idOAT}_MED${numMed}_${codigo}_${dataNome}_01.jpg`;
-          a.href = c.toDataURL("image/jpeg", 0.9);
+          a.download = `${idOAT}_MED${numMed.padStart(2, "0")}_${codigo}_${dataNome}_01.jpg`;
+          a.href = jpegBase64;
           a.click();
-          alert(`Fotografia gravada com sucesso na memória: ${a.download}`);
+
+          const statusFotoEl = document.getElementById(`statusFoto_${codigo}`);
+          if (statusFotoEl) statusFotoEl.innerText = "✅ Foto de campo anexada para o Caderno PDF";
+
+          alert(`Foto gravada na memória e anexada ao item ${codigo}!`);
         };
         img.src = evt.target.result;
       };
       reader.readAsDataURL(file);
     }
 
+    function dispararGeracaoCaderno() {
+      if (!obraAtiva) {
+        alert("Selecione ou cadastre uma OAT primeiro.");
+        return;
+      }
+      const numMed = document.getElementById("medicaoNumero").value;
+      window.gerarCadernoMedicaoPDF(obraAtiva, numMed);
+    }
+
+    // =========================================================================
+    // GESTÃO DA LIXEIRA
+    // =========================================================================
     function moverObraParaLixeira() {
       if (!obraAtiva) return;
 
@@ -601,6 +669,7 @@
       }
     }
 
+    // Modal Relatório Oficial (Espelho SGO)
     function abrirModalRelatorio() {
       if (!obraAtiva) return;
 
@@ -661,7 +730,7 @@
     function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
-    // Chamada limpa do módulo externo
+    // Chamada do módulo desacoplado sgo-parser.js
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
       const status = document.getElementById("statusExtracao");
