@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- PDF.js via CDN Oficial sem dependência de worker externo -->
+  <!-- PDF.js via CDN Oficial -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <!-- Módulo Extrator de PDF desacoplado -->
+  <script src="sgo-parser.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
 </head>
@@ -66,7 +68,6 @@
 
     <!-- LISTA DE ITENS OU TELA VAZIA (EMPTY STATE) -->
     <div id="listaItens" class="space-y-3 pb-8">
-      <!-- Injetado dinamicamente via JS -->
     </div>
 
   </main>
@@ -110,7 +111,7 @@
           <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
             <span>♻️ Lixeira de OATs / Obras</span>
           </h3>
-          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições intactas.</p>
+          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições salvas.</p>
         </div>
         <button onclick="fecharModalLixeira()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -175,7 +176,6 @@
       pdfjsLib.GlobalWorkerOptions.workerSrc = '';
     }
 
-    // Inicialização da base de obras exclusivamente via LocalStorage (100% dinâmica)
     let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [];
     let lixeiraObras = JSON.parse(localStorage.getItem("lixeira_obras_sop")) || [];
     let obraAtiva = obrasCadastradas.length > 0 ? obrasCadastradas[0] : null;
@@ -351,7 +351,7 @@
             </div>
 
             <div>
-              <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo aritmética: ex. Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
+              <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo: Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
             </div>
 
             <div class="border border-blue-900 rounded-lg overflow-hidden bg-white shadow-inner">
@@ -433,9 +433,6 @@
       renderizarLista();
     }
 
-    // =========================================================================
-    // CANVAS DE CROQUIS
-    // =========================================================================
     let canvasesAtivos = {};
 
     function inicializarCanvasInline(codigo) {
@@ -524,9 +521,6 @@
       reader.readAsDataURL(file);
     }
 
-    // =========================================================================
-    // GESTÃO DA LIXEIRA
-    // =========================================================================
     function moverObraParaLixeira() {
       if (!obraAtiva) return;
 
@@ -607,7 +601,6 @@
       }
     }
 
-    // Modal Relatório Oficial (Espelho SGO)
     function abrirModalRelatorio() {
       if (!obraAtiva) return;
 
@@ -668,9 +661,7 @@
     function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
-    // =========================================================================
-    // EXTRATOR RESILIENTE PARA ORÇAMENTO DO SGO
-    // =========================================================================
+    // Chamada limpa do módulo externo
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
       const status = document.getElementById("statusExtracao");
@@ -683,169 +674,24 @@
       status.innerText = "⏳ Extraindo dados do SGO...";
 
       try {
-        const arrayBuffer = await fileOrcamento.arrayBuffer();
-        const loadingTask = pdfjsLib.getDocument({
-          data: new Uint8Array(arrayBuffer),
-          disableFontFace: true,
-          nativeImageDecoderSupport: 'none'
-        });
-        const pdf = await loadingTask.promise;
-        
-        let textoTotal = "";
-        let todasLinhas = [];
-
-        for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
-          const page = await pdf.getPage(pNum);
-          const textContent = await page.getTextContent();
-          
-          let pageLines = [];
-          let currentLine = "";
-          let lastY = null;
-
-          textContent.items.forEach(it => {
-            const str = it.str;
-            const y = Math.round(it.transform[5]);
-            textoTotal += str + " ";
-
-            if (lastY === null || Math.abs(y - lastY) <= 3) {
-              currentLine += " " + str;
-            } else {
-              if (currentLine.trim()) pageLines.push(currentLine.trim());
-              currentLine = str;
-            }
-            lastY = y;
-          });
-          if (currentLine.trim()) pageLines.push(currentLine.trim());
-          todasLinhas.push(...pageLines);
-        }
-
-        const matchDemanda = textoTotal.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/" + new Date().getFullYear() + "/001"];
-        const matchImovel = textoTotal.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
-        const matchMunicipio = textoTotal.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "RS"];
-        const matchValor = textoTotal.match(/Total do Orçamento[\s\S]*?([\d\.]+\,\d{2})/i) || ["", "0,00"];
-
-        let itens = [];
-        let grupoAtual = "SERVIÇOS DE CANTEIRO DE OBRA";
-
-        const macroetapas = [
-          "SERV INICIAIS DE INSTALAÇÃO DA OBRA", "MOBILIZAÇÃO",
-          "ADMINISTRAÇÃO DIRETA DA OBRA", "DEMOLIÇÕES",
-          "RECUPERAÇÃO ESTRUTURAL", "ESQUADRIAS", "COBERTURA",
-          "REVEST DE PISOS, PAREDES E FORROS", "PINTURAS E TEXTURAS",
-          "MUROS, TELAS E ACESSO ESCOLAR", "REGISTRO DO EXECUTADO"
-        ];
-
-        let i = 0;
-        while (i < todasLinhas.length) {
-          let linha = todasLinhas[i].trim();
-
-          for (let me of macroetapas) {
-            if (linha.includes(me) && !linha.startsWith("Total de")) {
-              grupoAtual = me;
-            }
-          }
-
-          let matchCod = linha.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\s+(.*)/i);
-          if (matchCod) {
-            let cod = matchCod[1].toUpperCase();
-            let resto = matchCod[2].trim();
-
-            if ((cod === "100326" && resto.includes("ADAPTADA")) || 
-                (cod === "SOPX29" && resto.includes("SERV INICIAIS")) ||
-                (cod === "160386")) {
-              i++;
-              continue;
-            }
-
-            let bloco = [resto];
-            let j = i + 1;
-            while (j < todasLinhas.length && (j - i) <= 10) {
-              let prox = todasLinhas[j].trim();
-              if (prox.match(/^(SOP[X\d]\w*|CPXX?\w*|CSTXX?\w*|\d{5,6})\s+/i) && 
-                  !(prox.startsWith("100326") && prox.includes("ADAPTADA")) &&
-                  !prox.startsWith("160386")) {
-                break;
-              }
-              if (prox.startsWith("Total de") || prox.startsWith("Página0")) {
-                break;
-              }
-              bloco.push(prox);
-              j++;
-            }
-
-            let blocoTexto = bloco.join(" ");
-
-            let mQtd = blocoTexto.match(/(\d{1,4}(?:\.\d{3})*,\d{2})\s*(M2|m²|UN|H|Η|M3|KG|M3XKM|MXMES|MXME\s*S|M|pto|un)\b/i);
-            let mInv = blocoTexto.match(/\b(M2|m²|UN|H|M3|KG|M)\s+(\d{1,4}(?:\.\d{3})*,\d{2})\b/i);
-
-            let qtd = 1.0;
-            let un = "UN";
-            let desc = blocoTexto;
-
-            if (mQtd) {
-              qtd = parseFloat(mQtd[1].replace(/\./g, "").replace(",", "."));
-              un = mQtd[2].toUpperCase().replace("Η", "H").replace(/\s+/g, "");
-              let cut = blocoTexto.indexOf(mQtd[0]);
-              if (cut > 0) desc = blocoTexto.substring(0, cut).trim();
-            } else if (mInv) {
-              qtd = parseFloat(mInv[2].replace(/\./g, "").replace(",", "."));
-              un = mInv[1].toUpperCase();
-              let cut = blocoTexto.indexOf(mInv[0]);
-              if (cut > 0) desc = blocoTexto.substring(0, cut).trim();
-            }
-
-            desc = desc.replace(/\(REF\..*?\)/gi, "")
-                       .replace(/AF_\d{2}\/\d{4}/gi, "")
-                       .replace(/\s+/g, " ")
-                       .trim();
-
-            if (!desc) desc = "Serviço de Engenharia";
-
-            if (!itens.some(it => it.codigo === cod)) {
-              itens.push({
-                codigo: cod,
-                desc: desc.slice(0, 140),
-                un: un,
-                qtd: qtd,
-                grupo: grupoAtual
-              });
-            }
-
-            i = j - 1;
-          }
-          i++;
-        }
-
-        if (itens.length === 0) {
-          throw new Error("Não foi possível extrair composições deste PDF.");
-        }
-
-        const novaObra = {
-          uid: "oat_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-          id: matchDemanda[1].split("/").pop() || Date.now().toString().slice(-4),
-          demanda: matchDemanda[1].trim(),
-          nome: matchImovel[1].trim(),
-          municipio: matchMunicipio[1].trim(),
-          valorGlobal: parseFloat(matchValor[1].replace(/\./g, "").replace(",", ".")) || 0,
-          itens: itens
-        };
+        const novaObra = await window.extrairDadosOrcamentoSGO(fileOrcamento);
 
         obrasCadastradas.push(novaObra);
         localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
 
-        status.innerText = `✅ Sucesso! ${itens.length} composições importadas.`;
+        status.innerText = `✅ Sucesso! ${novaObra.itens.length} composições importadas.`;
 
         setTimeout(() => {
           fecharModalNovaObra();
           obraAtiva = novaObra;
           codigoItemAberto = null;
           carregarSeletorObras();
-          alert(`OAT ${novaObra.demanda} cadastrada com ${itens.length} composições com sucesso!`);
-        }, 600);
+          alert(`OAT ${novaObra.demanda} cadastrada com ${novaObra.itens.length} composições com sucesso!`);
+        }, 500);
 
       } catch (err) {
-        console.error(err);
-        status.innerText = "❌ Erro ao ler PDF: " + (err.message || "Ficheiro inválido.");
+        console.error("Erro na extração:", err);
+        status.innerText = "❌ " + (err.message || "Erro ao ler o PDF.");
       }
     };
 
