@@ -5,27 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Leitor de PDF client-side embutido -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- CABEÇALHO COM CONTROLO DE OBRAS E GPS -->
+  <!-- CABEÇALHO COM CONTROLO DE OBRAS E RELATÓRIO -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
         <div class="flex items-center gap-2 mt-0.5">
-          <!-- Seletor de Obras Cadastradas -->
           <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer">
-            <!-- Populado dinamicamente -->
           </select>
           <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button onclick="abrirModalRelatorio()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          📊 Espelho SGO / Relatório
+        </button>
         <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           ➕ Nova Obra (PDF)
         </button>
@@ -39,7 +39,7 @@
   <!-- PAINEL PRINCIPAL -->
   <main class="max-w-7xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- COLUNA 1: COMPOSIÇÕES DA OBRA SELECIONADA -->
+    <!-- COLUNA 1: COMPOSIÇÕES -->
     <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[84vh]">
       <div class="flex justify-between items-center mb-2">
         <h2 id="totalComposicoesTitulo" class="font-bold text-slate-700 text-sm">Composições Orçamentárias</h2>
@@ -51,14 +51,12 @@
       <input type="text" id="buscaItem" placeholder="Filtrar por código ou descrição..." class="w-full text-xs p-2 border rounded-lg mb-2 bg-slate-50">
 
       <div id="listaItens" class="flex-1 overflow-y-auto space-y-2 pr-1">
-        <!-- Injetado dinamicamente -->
       </div>
     </section>
 
     <!-- COLUNA 2 E 3: FICHA DE MEDIÇÃO, QUANTITATIVOS E CROQUIS AMPLIADO -->
     <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col h-[84vh]">
       
-      <!-- Topo da Composição Ativa -->
       <div class="border-b pb-2 mb-2 flex justify-between items-start">
         <div>
           <span id="itemAtivoCodigo" class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded">Código</span>
@@ -93,12 +91,11 @@
         </div>
       </div>
 
-      <!-- Memória de Cálculo / Fórmulas -->
       <div class="mb-2">
         <input type="text" id="memoriaCalculo" placeholder="Fórmula de cálculo métrico: C x L x H = Volume | C x L = Área | Deduções de vãos" class="w-full text-xs p-1.5 border rounded-lg bg-slate-50 font-mono">
       </div>
 
-      <!-- Grande Quadrado de Croquis (Maximização de Área) -->
+      <!-- Grande Quadrado de Croquis -->
       <div class="flex-1 flex flex-col border border-blue-900 rounded-lg overflow-hidden relative bg-white">
         <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
           <span class="font-bold text-blue-900 text-[11px]">Área Livre para Croquis Cotados e Esquemas Gráficos</span>
@@ -114,7 +111,6 @@
         <canvas id="sketchCanvas" class="flex-1 w-full h-full touch-none" style="background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px); background-size: 16px 16px;"></canvas>
       </div>
 
-      <!-- Rodapé Operacional -->
       <div class="flex justify-between items-center mt-2 pt-2 border-t text-xs">
         <span id="rodapeObraTexto" class="text-slate-400 text-[10px]">Obra Selecionada</span>
         <button id="btnSalvarFicha" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow flex items-center gap-1 transition">
@@ -125,7 +121,49 @@
     </section>
   </main>
 
-  <!-- MODAL DE IMPORTAÇÃO AUTOMÁTICA DE NOVA OBRA POR PDF -->
+  <!-- MODAL: RELATÓRIO CONSOLIDADO / ESPELHO SGO -->
+  <div id="modalRelatorio" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-5xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh]">
+      <div class="flex justify-between items-start border-b pb-3 mb-3">
+        <div>
+          <h3 class="text-base font-bold text-blue-950">Boletim Consolidado de Medição — Espelho SGO</h3>
+          <p id="relatorioSubtitulo" class="text-xs text-slate-500">Resumo acumulado para lançamento manual no sistema oficial</p>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="exportarCSVRelatorio()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow">
+            Exportar Excel (CSV)
+          </button>
+          <button onclick="window.print()" class="bg-blue-800 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow">
+            🖨️ Imprimir
+          </button>
+          <button onclick="fecharModalRelatorio()" class="text-slate-400 hover:text-slate-600 font-bold text-lg px-2">✕</button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="bg-blue-900 text-white text-[11px]">
+              <th class="p-2 border border-blue-800">Item</th>
+              <th class="p-2 border border-blue-800">Código</th>
+              <th class="p-2 border border-blue-800">Descrição do Serviço</th>
+              <th class="p-2 border border-blue-800 text-center">Un.</th>
+              <th class="p-2 border border-blue-800 text-right">Qtd. Total</th>
+              <th class="p-2 border border-blue-800 text-right">Med. Anterior</th>
+              <th class="p-2 border border-blue-800 text-right bg-blue-800">Nesta Medição</th>
+              <th class="p-2 border border-blue-800 text-right">Acumulado</th>
+              <th class="p-2 border border-blue-800 text-right">Saldo Restante</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaRelatorio" class="divide-y divide-slate-200">
+            <!-- Linhas montadas dinamicamente -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA OBRA POR PDF -->
   <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
       <h3 class="text-base font-bold text-blue-950 mb-1">Cadastrar Nova Obra via PDF</h3>
@@ -150,10 +188,8 @@
   </div>
 
   <script>
-    // Inicialização do PDF.js Worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // Base de Obras Pré-carregada (Inclui a E.E.E.F. Adelino Souza completa com 59 itens)
     const obraInicial = {
       id: "13517",
       demanda: "SOP/2025/01448",
@@ -223,7 +259,6 @@
       ]
     };
 
-    // Gestão de Obras no LocalStorage
     let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [obraInicial];
     let obraAtiva = obrasCadastradas[0];
     let itemSelecionado = obraAtiva.itens[23] || obraAtiva.itens[0];
@@ -292,7 +327,6 @@
       document.getElementById("itemAtivoDesc").innerText = item.desc;
       document.getElementById("qtdContratada").innerText = `${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
       
-      // Carregar valores gravados da medição ativa se existirem
       const chaveItem = `med_${obraAtiva.id}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
       const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
       
@@ -315,7 +349,6 @@
       saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm" : "font-bold text-emerald-700 text-sm";
     }
 
-    // Gravar medição no armazenamento interno do navegador
     document.getElementById("btnSalvarFicha").onclick = () => {
       const numMed = document.getElementById("medicaoNumero").value;
       const chaveItem = `med_${obraAtiva.id}_${itemSelecionado.codigo}_${numMed}`;
@@ -379,7 +412,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
 
-    // Câmera: Estampa APENAS a data e força o download direto no armazenamento do tablet
+    // Foto com Data e Download Direto
     document.getElementById("inputFoto").addEventListener("change", function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -415,72 +448,48 @@
       reader.readAsDataURL(file);
     });
 
-    // Módulo de Extração de PDF para Novas Obras
-    function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
-    function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
+    // FUNÇÕES DO MODAL DE RELATÓRIO OFICIAL (ESPELHO SGO)
+    function abrirModalRelatorio() {
+      const numMed = document.getElementById("medicaoNumero").value;
+      document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | Medição Nº ${numMed} (${obraAtiva.demanda})`;
+      const tbody = document.getElementById("corpoTabelaRelatorio");
+      tbody.innerHTML = "";
 
-    document.getElementById("btnProcessarPDF").onclick = async () => {
-      const fileInput = document.getElementById("pdfInputFile");
-      const status = document.getElementById("statusExtracao");
-      if (!fileInput.files[0]) {
-        alert("Por favor, selecione um ficheiro PDF.");
-        return;
-      }
+      obraAtiva.itens.forEach((it, idx) => {
+        const chave = `med_${obraAtiva.id}_${it.codigo}_${numMed}`;
+        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
+        const acum = d.ant + d.per;
+        const saldo = it.qtd - acum;
 
-      status.innerText = "A ler páginas e tabelas do SGO...";
-      const file = fileInput.files[0];
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      
-      let fullText = "";
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        fullText += textContent.items.map(s => s.str).join(" ") + "\n";
-      }
-
-      // Extração básica via regex das tabelas do SGO
-      const matchDemanda = fullText.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/NOVA"];
-      const matchImovel = fullText.match(/Imóvel:\s*([^\n\r]+)/i) || ["", "NOVO EMPREENDIMENTO"];
-      const matchMunicipio = fullText.match(/Município:\s*([^\n\r]+)/i) || ["", "RS"];
-
-      const novaObra = {
-        id: "NOVA_" + Date.now().toString().slice(-4),
-        demanda: matchDemanda[1].trim(),
-        nome: matchImovel[1].trim(),
-        municipio: matchMunicipio[1].trim(),
-        coords: { lat: 0, lng: 0 },
-        itens: obraInicial.itens // Instancia os itens orçamentários extraídos
-      };
-
-      obrasCadastradas.push(novaObra);
-      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-      status.innerText = "Obra criada com sucesso!";
-      
-      setTimeout(() => {
-        fecharModalNovaObra();
-        carregarSeletorObras();
-        document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
-        document.getElementById("seletorObra").dispatchEvent(new Event("change"));
-      }, 800);
-    };
-
-    // Registo do Service Worker para suporte Offline completo
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('PWA Service Worker registado!', reg))
-          .catch(err => console.log('Erro ao registar Service Worker:', err));
+        const tr = document.createElement("tr");
+        tr.className = d.per > 0 ? "bg-amber-50 font-semibold" : (idx % 2 === 0 ? "bg-white" : "bg-slate-50");
+        tr.innerHTML = `
+          <td class="p-2 border text-slate-500">${idx + 1}</td>
+          <td class="p-2 border font-mono font-bold text-blue-900">${it.codigo}</td>
+          <td class="p-2 border text-slate-800">${it.desc}</td>
+          <td class="p-2 border text-center text-slate-600">${it.un}</td>
+          <td class="p-2 border text-right">${it.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td class="p-2 border text-right text-slate-500">${d.ant.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td class="p-2 border text-right font-extrabold ${d.per > 0 ? 'text-blue-900 bg-amber-100' : 'text-slate-400'}">${d.per.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td class="p-2 border text-right font-bold">${acum.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+          <td class="p-2 border text-right ${saldo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'}">${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+        `;
+        tbody.appendChild(tr);
       });
+
+      document.getElementById("modalRelatorio").classList.remove("hidden");
     }
 
-    // Inicialização do aplicativo
-    setTimeout(() => {
-      carregarSeletorObras();
-      popularFiltroGrupos();
-      selecionarItem(obraAtiva.itens[23]);
-      resizeCanvas();
-    }, 150);
-  </script>
-</body>
-</html>
+    function fecharModalRelatorio() {
+      document.getElementById("modalRelatorio").classList.add("hidden");
+    }
+
+    function exportarCSVRelatorio() {
+      const numMed = document.getElementById("medicaoNumero").value;
+      let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
+
+      obraAtiva.itens.forEach((it, idx) => {
+        const chave = `med_${obraAtiva.id}_${it.codigo}_${numMed}`;
+        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
+        const acum = d.ant + d.per;
+        const saldo = it.qtd - acum;
