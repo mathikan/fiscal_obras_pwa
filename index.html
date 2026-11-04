@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- PDF.js sem worker externo (Legacy build estável para navegadores móveis) -->
+  <!-- PDF.js via CDN Oficial sem dependência de worker externo -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
@@ -14,16 +14,17 @@
 
   <!-- CABEÇALHO COM CONTROLO DE OATs, LIXEIRA E GPS -->
   <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
-    <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
+    <div class="max-w-5xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
         <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
         <div class="flex items-center gap-2 mt-0.5">
-          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-xs md:text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer max-w-[300px] md:max-w-md truncate">
+          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-xs md:text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer max-w-[280px] md:max-w-md truncate">
+            <option value="">Nenhuma OAT cadastrada</option>
           </select>
-          <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
+          <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">---</span>
           
-          <button onclick="moverObraParaLixeira()" title="Mover esta OAT para a Lixeira" class="text-xs bg-red-800/80 hover:bg-red-700 text-red-200 px-2 py-1 rounded transition flex items-center gap-1">
-            🗑️ Excluir OAT
+          <button id="btnExcluirOAT" onclick="moverObraParaLixeira()" title="Mover esta OAT para a Lixeira" class="hidden text-xs bg-red-800/80 hover:bg-red-700 text-red-200 px-2 py-1 rounded transition flex items-center gap-1">
+            🗑️ Excluir
           </button>
           
           <button onclick="abrirModalLixeira()" title="Ver OATs Excluídas" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition flex items-center gap-1 font-semibold">
@@ -32,7 +33,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="abrirModalRelatorio()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+        <button id="btnEspelhoSGO" onclick="abrirModalRelatorio()" class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           📊 Espelho SGO
         </button>
         <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
@@ -45,89 +46,29 @@
     </div>
   </header>
 
-  <!-- PAINEL PRINCIPAL -->
-  <main class="max-w-7xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- PAINEL CENTRAL DE LISTAGEM SANFONA (ACCORDION INLINE) -->
+  <main class="max-w-5xl mx-auto p-4 flex-1 w-full flex flex-col">
 
-    <!-- COLUNA 1: LISTAGEM DE COMPOSIÇÕES -->
-    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[84vh]">
-      <div class="flex justify-between items-center mb-2">
-        <h2 id="totalComposicoesTitulo" class="font-bold text-slate-700 text-sm">Composições Orçamentárias</h2>
-        <select id="filtroGrupo" class="text-xs border rounded p-1 bg-slate-50 text-slate-600 max-w-[150px]">
+    <!-- BARRA DE CONTROLO DE FILTROS E MEDIÇÃO -->
+    <div id="barraControles" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4 flex flex-wrap justify-between items-center gap-3">
+      <div class="flex items-center gap-3 flex-1 min-w-[280px]">
+        <input type="text" id="buscaItem" placeholder="Buscar código ou descrição do serviço..." class="w-full text-xs p-2 border rounded-lg bg-slate-50">
+        <select id="filtroGrupo" class="text-xs border rounded-lg p-2 bg-slate-50 text-slate-700 font-semibold min-w-[170px]">
           <option value="TODOS">Todas as Etapas</option>
         </select>
       </div>
 
-      <input type="text" id="buscaItem" placeholder="Filtrar por código ou descrição..." class="w-full text-xs p-2 border rounded-lg mb-2 bg-slate-50">
-
-      <div id="listaItens" class="flex-1 overflow-y-auto space-y-2 pr-1">
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-bold text-slate-600">Medição Atual:</span>
+        <input type="number" id="medicaoNumero" value="1" min="1" max="99" class="w-16 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50">
       </div>
-    </section>
+    </div>
 
-    <!-- COLUNA 2 E 3: FICHA DE MEDIÇÃO, QUANTITATIVOS E CROQUIS AMPLIADO -->
-    <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col h-[84vh]">
-      
-      <div class="border-b pb-2 mb-2 flex justify-between items-start">
-        <div>
-          <span id="itemAtivoCodigo" class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded">Código</span>
-          <span id="itemAtivoGrupo" class="text-xs text-slate-500 font-semibold ml-2">ETAPA</span>
-          <h3 id="itemAtivoDesc" class="font-bold text-slate-800 text-sm mt-1 leading-snug">
-            Selecione uma composição
-          </h3>
-        </div>
-        <div class="text-right">
-          <span class="text-[11px] text-slate-500 block">Medição Nº</span>
-          <input type="number" id="medicaoNumero" value="1" min="1" max="99" class="w-16 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50">
-        </div>
-      </div>
+    <!-- LISTA DE ITENS OU TELA VAZIA (EMPTY STATE) -->
+    <div id="listaItens" class="space-y-3 pb-8">
+      <!-- Injetado dinamicamente via JS -->
+    </div>
 
-      <!-- Tabela de Quantitativos Físicos -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
-        <div>
-          <span class="text-slate-500 block text-[10px] uppercase font-bold">Qtd. Contratada</span>
-          <span id="qtdContratada" class="font-bold text-slate-800 text-sm">0,00</span>
-        </div>
-        <div>
-          <span class="text-slate-500 block text-[10px] uppercase font-bold">Med. Anterior</span>
-          <input type="number" id="qtdAnterior" value="0.00" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-white">
-        </div>
-        <div>
-          <span class="text-blue-700 block text-[10px] uppercase font-bold">Med. do Período</span>
-          <input type="number" id="qtdPeriodo" value="0.00" step="0.01" class="w-full border-2 border-blue-600 rounded p-1 font-extrabold text-blue-900 bg-white">
-        </div>
-        <div>
-          <span class="text-slate-500 block text-[10px] uppercase font-bold">Saldo Restante</span>
-          <span id="qtdSaldo" class="font-bold text-emerald-700 text-sm">0,00</span>
-        </div>
-      </div>
-
-      <div class="mb-2">
-        <input type="text" id="memoriaCalculo" placeholder="Fórmula de cálculo métrico: C x L x H = Volume | C x L = Área | Deduções de vãos" class="w-full text-xs p-1.5 border rounded-lg bg-slate-50 font-mono">
-      </div>
-
-      <!-- Grande Quadrado de Croquis -->
-      <div class="flex-1 flex flex-col border border-blue-900 rounded-lg overflow-hidden relative bg-white">
-        <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
-          <span class="font-bold text-blue-900 text-[11px]">Área Livre para Croquis Cotados e Esquemas Gráficos</span>
-          <div class="flex gap-2">
-            <button id="btnLimparCanvas" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar</button>
-            <label class="text-[11px] bg-blue-700 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1 font-bold">
-              📷 Foto de Campo
-              <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden">
-            </label>
-          </div>
-        </div>
-
-        <canvas id="sketchCanvas" class="flex-1 w-full h-full touch-none" style="background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px); background-size: 16px 16px;"></canvas>
-      </div>
-
-      <div class="flex justify-between items-center mt-2 pt-2 border-t text-xs">
-        <span id="rodapeObraTexto" class="text-slate-400 text-[10px]">Obra Selecionada</span>
-        <button id="btnSalvarFicha" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          💾 Guardar Medição do Item
-        </button>
-      </div>
-
-    </section>
   </main>
 
   <!-- MODAL: NOVA OBRA / OAT VIA PDF -->
@@ -169,7 +110,7 @@
           <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
             <span>♻️ Lixeira de OATs / Obras</span>
           </h3>
-          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições salvas.</p>
+          <p class="text-xs text-slate-500">Obras na lixeira podem ser restauradas com suas medições intactas.</p>
         </div>
         <button onclick="fecharModalLixeira()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -230,95 +171,15 @@
   </div>
 
   <script>
-    // Configura o pdf.js para rodar diretamente sem depender de worker externo
     if (window.pdfjsLib) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = '';
     }
 
-    const obraInicial = {
-      uid: "oat_base_adelino_01448",
-      id: "13517",
-      demanda: "SOP/2025/01448",
-      nome: "E.E.E.F. PROFESSOR ADELINO SOUZA",
-      municipio: "São Francisco de Paula - RS",
-      valorGlobal: 530852.31,
-      itens: [
-        {codigo: "SOPX29", desc: "SERVIÇOS DE CANTEIRO DE OBRA - PLOTAGEM DE ADESIVO VINIL", un: "M2", qtd: 3.00, grupo: "SERV INICIAIS DE INSTALAÇÃO DA OBRA"},
-        {codigo: "CSTXX01", desc: "GALPAO OBRAS - PADRÃO CORSAN (REF. PLEO 524109)", un: "m²", qtd: 9.00, grupo: "MOBILIZAÇÃO"},
-        {codigo: "90778", desc: "ENGENHEIRO CIVIL DE OBRA PLENO COM ENCARGOS", un: "H", qtd: 40.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
-        {codigo: "90776", desc: "ENCARREGADO GERAL COM ENCARGOS COMPLEMENTARES", un: "H", qtd: 439.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
-        {codigo: "97647", desc: "REMOÇÃO DE TELHAS DE FIBROCIMENTO METÁLICA E CERÂMICA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
-        {codigo: "97650", desc: "REMOÇÃO DE TRAMA DE MADEIRA PARA COBERTURA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
-        {codigo: "97652", desc: "REMOÇÃO DE TESOURAS DE MADEIRA, VÃO >= 8M", un: "UN", qtd: 10.00, grupo: "DEMOLIÇÕES"},
-        {codigo: "97631", desc: "DEMOLIÇÃO DE ARGAMASSAS, MANUAL", un: "M2", qtd: 53.35, grupo: "DEMOLIÇÕES"},
-        {codigo: "SOPX49", desc: "RETIRADA DE GRADE DE FERRO (REF. SEINFRA C3040)", un: "M2", qtd: 23.78, grupo: "DEMOLIÇÕES"},
-        {codigo: "100205", desc: "TRANSPORTE HORIZONTAL COM JERICA DE 60 L", un: "M3XKM", qtd: 17.43, grupo: "DEMOLIÇÕES"},
-        {codigo: "CPXX309", desc: "CAÇAMBA DE 4M3 PARA RETIRADA DE ENTULHO", un: "UN", qtd: 5.96, grupo: "DEMOLIÇÕES"},
-        {codigo: "SOPX55", desc: "LOCACAO DE ANDAIME METALICO TUBULAR TIPO TORRE", un: "MXMES", qtd: 287.00, grupo: "DEMOLIÇÕES"},
-        {codigo: "97064", desc: "MONTAGEM E DESMONTAGEM DE ANDAIME TUBULAR", un: "M", qtd: 86.10, grupo: "DEMOLIÇÕES"},
-        {codigo: "SOPX41", desc: "APICOAMENTO DE CONCRETO / PREPARO DE SUPERFÍCIE", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-        {codigo: "SOPX46", desc: "LIMPEZA DE SUPERFICIE C/ ESCOVA DE AÇO", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-        {codigo: "SOPX42", desc: "APLICACAO DE INIBIDOR DE CORROSAO SIKA FERROGARD-903", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-        {codigo: "CPXX507", desc: "RECUPERAÇÃO CONCRETO RECONSTITUIÇÃO ARGAMASSA POLIMÉRICA 25MM", un: "m²", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-        {codigo: "SOP115", desc: "TRATAMENTO DE TRINCAS E FISSURAS EM ESTRUTURA", un: "M2", qtd: 28.50, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-        {codigo: "CSTXX020", desc: "REINSTALAÇÃO GRADE DE FERRO (REF. SINAPI 73932/001)", un: "M2", qtd: 23.78, grupo: "ESQUADRIAS"},
-        {codigo: "CPXX115", desc: "VEDAÇÃO DE ESQUADRIAS COM SELANTE SILICONE", un: "M", qtd: 211.86, grupo: "ESQUADRIAS"},
-        {codigo: "100372", desc: "FABRICAÇÃO E INSTALAÇÃO DE MEIA TESOURA DE MADEIRA VÃO 8M", un: "UN", qtd: 10.00, grupo: "COBERTURA"},
-        {codigo: "92543", desc: "TRAMA DE MADEIRA COMPOSTA POR TERÇAS PARA TELHADOS", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-        {codigo: "102234-C", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (COBERTURA)", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-        {codigo: "SOPX149", desc: "TELHAMENTO TERMOACÚSTICA GALVALUME PIR 30MM", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-        {codigo: "SOP126", desc: "CUMEEIRA DE ACO PINT PO OU COIL-COATING LISA/DENTADA", un: "M", qtd: 49.30, grupo: "COBERTURA"},
-        {codigo: "SOP145", desc: "ACABAMENTO FRONTAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 98.60, grupo: "COBERTURA"},
-        {codigo: "SOP146", desc: "ACABAMENTO LATERAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 48.00, grupo: "COBERTURA"},
-        {codigo: "100327", desc: "RUFO EM CHAPA DE AÇO GALVANIZADO Nº 26", un: "M", qtd: 17.00, grupo: "COBERTURA"},
-        {codigo: "CPXX572", desc: "TESTEIRA EM TÁBUA APARELHADA, ATÉ 20CM", un: "M", qtd: 162.60, grupo: "COBERTURA"},
-        {codigo: "87891", desc: "CHAPISCO APLICADO EM ALVENARIA E ESTRUTURA COM ROLO", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "87781", desc: "EMBOÇO OU MASSA ÚNICA ARGAMASSA 1:2:8 ESPESSURA 35MM", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "97087", desc: "CAMADA SEPARADORA RADIER/PISO EM LONA PLÁSTICA", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "97086", desc: "FORMA PARA RADIER/PISO MADEIRA SERRADA 4X", un: "M2", qtd: 7.68, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "97091", desc: "ARMAÇÃO PARA RADIER/PISO COM TELA Q-159", un: "KG", qtd: 1056.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "104923", desc: "CONCRETAGEM DE SAPATA/PISO FCK 30 MPA C/ JERICA", un: "M3", qtd: 28.80, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "97097", desc: "ACABAMENTO POLIDO PARA PISO DE CONCRETO ARMADO", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "CPXX063", desc: "CORTE MECANICO DE PAVIMENTO/PISO DISCO DIAMANTADO", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "98577", desc: "TRATAMENTO DE JUNTA SERRADA C/ SILICONE", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "98524", desc: "LIMPEZA MANUAL DE VEGETAÇÃO COM ENXADA", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "94319", desc: "ATERRO MANUAL DE VALAS COM SOLO ARGILO-ARENOSO", un: "M3", qtd: 8.16, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "103946", desc: "PLANTIO DE GRAMA ESMERALDA OU SÃO CARLOS", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-        {codigo: "102234-P", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (GERAL)", un: "M2", qtd: 834.38, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102193", desc: "LIXAMENTO DE MADEIRA PARA FUNDO OU PINTURA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102197", desc: "PINTURA FUNDO NIVELADOR ALQUÍDICO BRANCO", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102220", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM MADEIRA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "99814", desc: "LIMPEZA DE SUPERFÍCIE C/ JATO DE ALTA PRESSÃO", un: "M2", qtd: 350.35, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "CPXX354", desc: "REJUNTAMENTO DE JUNTAS C/ ARGAMASSA 1:3 ALVENARIA", un: "m²", qtd: 245.45, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102489", desc: "PINTURA HIDROFUGANTE COM SILICONE, 2 DEMÃOS", un: "M2", qtd: 155.98, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "100717", desc: "LIXAMENTO MANUAL EM SUPERFÍCIES METÁLICAS", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "100722", desc: "PINTURA COM TINTA ALQUIDICA DE FUNDO (ZARCÃO)", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "100760", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM METAL", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "SOPX97", desc: "PREPARO SUPERFICIE LIXAMENTO E FUNDO PREPARADOR", un: "M2", qtd: 99.05, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "88485", desc: "FUNDO SELADOR ACRÍLICO MANUAL EM PAREDE", un: "M2", qtd: 53.35, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "SOPX14", desc: "TINTA LATEX ACRÍLICA CORES SOP-RS, 2 DEMÃOS", un: "M2", qtd: 102.25, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102488", desc: "PREPARO PISO CIMENTADO - LIXAMENTO E LIMPEZA", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102494", desc: "PINTURA DE PISO TINTA EPOXI 2 DEMÃOS", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "102505", desc: "PINTURA DEMARCAÇÃO QUADRA BORRACHA CLORADA", un: "M", qtd: 242.00, grupo: "PINTURAS E TEXTURAS"},
-        {codigo: "CPXX356", desc: "PAR DE POSTES PARA VOLEIBOL C/ PINTURA", un: "UN", qtd: 1.00, grupo: "MUROS, TELAS E ACESSO ESCOLAR"},
-        {codigo: "SOP000", desc: "RELATÓRIOS, IMAGENS E DESENHOS (AS BUILT)", un: "UN", qtd: 1.00, grupo: "REGISTRO DO EXECUTADO (AS BUILT)"}
-      ]
-    };
-
+    // Inicialização da base de obras exclusivamente via LocalStorage (100% dinâmica)
     let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [];
-    if (obrasCadastradas.length === 0) {
-      obrasCadastradas = [obraInicial];
-      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-    } else {
-      obrasCadastradas.forEach((o, i) => {
-        if (!o.uid) o.uid = "oat_" + Date.now() + "_" + i;
-      });
-      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-    }
-
     let lixeiraObras = JSON.parse(localStorage.getItem("lixeira_obras_sop")) || [];
-    let obraAtiva = obrasCadastradas[0];
-    let itemSelecionado = obraAtiva.itens[23] || obraAtiva.itens[0];
+    let obraAtiva = obrasCadastradas.length > 0 ? obrasCadastradas[0] : null;
+    let codigoItemAberto = null;
 
     function atualizarContagemLixeira() {
       document.getElementById("contagemLixeira").innerText = lixeiraObras.length;
@@ -326,29 +187,348 @@
 
     function carregarSeletorObras() {
       const seletor = document.getElementById("seletorObra");
+      const btnExcluir = document.getElementById("btnExcluirOAT");
+      const btnEspelho = document.getElementById("btnEspelhoSGO");
+      const barraControles = document.getElementById("barraControles");
+      const demandaBadge = document.getElementById("demandaBadge");
+
       seletor.innerHTML = "";
+
+      if (obrasCadastradas.length === 0) {
+        obraAtiva = null;
+        demandaBadge.innerText = "---";
+        btnExcluir.classList.add("hidden");
+        btnEspelho.classList.add("hidden");
+        barraControles.classList.add("hidden");
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.innerText = "Nenhuma OAT cadastrada";
+        seletor.appendChild(opt);
+        renderizarEstadoVazio();
+        atualizarContagemLixeira();
+        return;
+      }
+
+      btnExcluir.classList.remove("hidden");
+      btnEspelho.classList.remove("hidden");
+      barraControles.classList.remove("hidden");
+
+      if (!obraAtiva || !obrasCadastradas.some(o => o.uid === obraAtiva.uid)) {
+        obraAtiva = obrasCadastradas[0];
+      }
+
       obrasCadastradas.forEach((o, idx) => {
         const opt = document.createElement("option");
         opt.value = idx;
         opt.innerText = `${o.nome} — [${o.demanda}]`;
+        if (o.uid === obraAtiva.uid) opt.selected = true;
         seletor.appendChild(opt);
       });
+
+      demandaBadge.innerText = obraAtiva.demanda;
+
       seletor.onchange = (e) => {
         obraAtiva = obrasCadastradas[e.target.value];
-        document.getElementById("demandaBadge").innerText = obraAtiva.demanda;
-        document.getElementById("rodapeObraTexto").innerText = `${obraAtiva.nome} | ${obraAtiva.municipio}`;
+        demandaBadge.innerText = obraAtiva.demanda;
         popularFiltroGrupos();
-        itemSelecionado = obraAtiva.itens[0];
-        selecionarItem(itemSelecionado);
+        codigoItemAberto = null;
+        renderizarLista();
       };
+
+      popularFiltroGrupos();
+      renderizarLista();
       atualizarContagemLixeira();
     }
 
-    function moverObraParaLixeira() {
-      if (obrasCadastradas.length <= 1) {
-        alert("Atenção: Não é possível mover a única OAT ativa para a lixeira. Cadastre outra antes.");
+    function popularFiltroGrupos() {
+      const sel = document.getElementById("filtroGrupo");
+      sel.innerHTML = "";
+      if (!obraAtiva) return;
+
+      const grupos = ["TODOS", ...new Set(obraAtiva.itens.map(i => i.grupo))];
+      grupos.forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.innerText = g;
+        sel.appendChild(opt);
+      });
+    }
+
+    function renderizarEstadoVazio() {
+      const container = document.getElementById("listaItens");
+      container.innerHTML = `
+        <div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center max-w-lg mx-auto my-12 shadow-sm">
+          <div class="text-5xl mb-3">📁</div>
+          <h3 class="text-base font-bold text-slate-800 mb-1">Nenhuma Obra / OAT Cadastrada</h3>
+          <p class="text-xs text-slate-500 mb-6 leading-relaxed">
+            O sistema está pronto para uso em campo. Insira o PDF do orçamento oficial expedido pelo SGO para carregar as composições, quantitativos e cronograma.
+          </p>
+          <button onclick="abrirModalNovaObra()" class="bg-blue-900 hover:bg-blue-800 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md transition inline-flex items-center gap-2">
+            <span>➕</span> Inserir Primeira OAT (PDF)
+          </button>
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // RENDERIZADOR SANFONA INLINE (ACCORDION)
+    // =========================================================================
+    function renderizarLista() {
+      if (!obraAtiva) {
+        renderizarEstadoVazio();
         return;
       }
+
+      const container = document.getElementById("listaItens");
+      const busca = document.getElementById("buscaItem").value.toLowerCase();
+      const grupo = document.getElementById("filtroGrupo").value;
+      const numMed = document.getElementById("medicaoNumero").value;
+
+      container.innerHTML = "";
+      
+      const itensFiltrados = obraAtiva.itens.filter(item => {
+        if (grupo !== "TODOS" && item.grupo !== grupo) return false;
+        if (busca && !item.codigo.toLowerCase().includes(busca) && !item.desc.toLowerCase().includes(busca)) return false;
+        return true;
+      });
+
+      itensFiltrados.forEach((item) => {
+        const isAberto = item.codigo === codigoItemAberto;
+        const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${numMed}`;
+        const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
+        const acum = dadosSalvos.ant + dadosSalvos.per;
+        const saldo = item.qtd - acum;
+
+        const itemWrapper = document.createElement("div");
+        itemWrapper.className = `rounded-xl border transition shadow-sm overflow-hidden ${isAberto ? 'border-blue-700 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}`;
+
+        const itemCard = document.createElement("div");
+        itemCard.className = "p-3 cursor-pointer flex justify-between items-center select-none";
+        itemCard.onclick = () => alternarGavetaItem(item.codigo);
+
+        itemCard.innerHTML = `
+          <div class="flex-1 pr-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="font-bold text-xs px-2 py-0.5 rounded ${isAberto ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}">${item.codigo}</span>
+              <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">${item.grupo}</span>
+              ${dadosSalvos.per > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">Medido no Período</span>' : ''}
+            </div>
+            <p class="text-xs font-semibold text-slate-800 leading-snug">${item.desc}</p>
+          </div>
+          <div class="text-right flex items-center gap-3">
+            <div>
+              <span class="text-xs font-mono font-bold text-slate-700 block">${item.qtd.toFixed(2)} ${item.un}</span>
+              <span class="text-[10px] ${saldo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'} block">Saldo: ${saldo.toFixed(2)}</span>
+            </div>
+            <span class="text-slate-400 font-bold text-sm transform transition ${isAberto ? 'rotate-180 text-blue-700' : ''}">▼</span>
+          </div>
+        `;
+
+        itemWrapper.appendChild(itemCard);
+
+        if (isAberto) {
+          const gaveta = document.createElement("div");
+          gaveta.className = "border-t border-slate-200 bg-slate-50/70 p-4 space-y-3";
+
+          gaveta.innerHTML = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <div class="bg-white p-2 rounded-lg border border-slate-200">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Contrato</span>
+                <span class="font-bold text-slate-800 text-sm">${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+              </div>
+              <div class="bg-white p-2 rounded-lg border border-slate-200">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Med. Anterior</span>
+                <input type="number" id="inline_ant_${item.codigo}" value="${dadosSalvos.ant.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-slate-50">
+              </div>
+              <div class="bg-white p-2 rounded-lg border-2 border-blue-600">
+                <span class="text-blue-700 block text-[10px] uppercase font-bold">Medição Atual</span>
+                <input type="number" id="inline_per_${item.codigo}" value="${dadosSalvos.per.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-extrabold text-blue-900 bg-blue-50/30">
+              </div>
+              <div class="bg-white p-2 rounded-lg border border-slate-200">
+                <span class="text-slate-400 block text-[10px] uppercase font-bold">Saldo Restante</span>
+                <span id="inline_saldo_${item.codigo}" class="font-bold ${saldo < 0 ? 'text-red-600' : 'text-emerald-700'} text-sm">${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+              </div>
+            </div>
+
+            <div>
+              <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo aritmética: ex. Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
+            </div>
+
+            <div class="border border-blue-900 rounded-lg overflow-hidden bg-white shadow-inner">
+              <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
+                <span class="font-bold text-blue-900 text-[11px]">Área de Desenho Cotado e Esquemas Gráficos</span>
+                <div class="flex gap-2">
+                  <button onclick="limparCanvasAtivo('${item.codigo}')" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar</button>
+                  <label class="text-[11px] bg-blue-700 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1 font-bold">
+                    📷 Tirar Foto (Data)
+                    <input type="file" accept="image/*" capture="environment" class="hidden" onchange="capturarFotoInline(event, '${item.codigo}')">
+                  </label>
+                </div>
+              </div>
+              <canvas id="canvas_${item.codigo}" class="w-full h-72 touch-none block" style="background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px); background-size: 16px 16px;"></canvas>
+            </div>
+
+            <div class="flex justify-between items-center pt-2">
+              <span class="text-[10px] text-slate-400">Gravado localmente na memória</span>
+              <button onclick="salvarMedicaoInline('${item.codigo}')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow text-xs flex items-center gap-1 transition">
+                💾 Salvar Medição do Item
+              </button>
+            </div>
+          `;
+
+          itemWrapper.appendChild(gaveta);
+        }
+
+        container.appendChild(itemWrapper);
+
+        if (isAberto) {
+          setTimeout(() => {
+            inicializarCanvasInline(item.codigo);
+            vincularCalculosInline(item);
+          }, 50);
+        }
+      });
+    }
+
+    function alternarGavetaItem(codigo) {
+      codigoItemAberto = (codigoItemAberto === codigo) ? null : codigo;
+      renderizarLista();
+    }
+
+    function vincularCalculosInline(item) {
+      const inAnt = document.getElementById(`inline_ant_${item.codigo}`);
+      const inPer = document.getElementById(`inline_per_${item.codigo}`);
+      const saldoEl = document.getElementById(`inline_saldo_${item.codigo}`);
+
+      function recalcular() {
+        const total = item.qtd;
+        const ant = parseFloat(inAnt.value) || 0;
+        const per = parseFloat(inPer.value) || 0;
+        const saldo = total - (ant + per);
+        saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
+        saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm" : "font-bold text-emerald-700 text-sm";
+      }
+
+      if (inAnt && inPer) {
+        inAnt.addEventListener("input", recalcular);
+        inPer.addEventListener("input", recalcular);
+      }
+    }
+
+    function salvarMedicaoInline(codigo) {
+      const numMed = document.getElementById("medicaoNumero").value;
+      const chaveItem = `med_${obraAtiva.uid}_${codigo}_${numMed}`;
+      const inAnt = document.getElementById(`inline_ant_${codigo}`);
+      const inPer = document.getElementById(`inline_per_${codigo}`);
+      const inMem = document.getElementById(`inline_mem_${codigo}`);
+
+      const dados = {
+        ant: parseFloat(inAnt.value) || 0,
+        per: parseFloat(inPer.value) || 0,
+        mem: inMem.value || ""
+      };
+
+      localStorage.setItem(chaveItem, JSON.stringify(dados));
+      alert(`Medição do item ${codigo} salva com sucesso!`);
+      renderizarLista();
+    }
+
+    // =========================================================================
+    // CANVAS DE CROQUIS
+    // =========================================================================
+    let canvasesAtivos = {};
+
+    function inicializarCanvasInline(codigo) {
+      const canvas = document.getElementById(`canvas_${codigo}`);
+      if (!canvas) return;
+
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = 288;
+      const ctx = canvas.getContext("2d");
+      let desenhando = false;
+
+      function startDraw(e) {
+        desenhando = true;
+        ctx.beginPath();
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        ctx.moveTo(clientX - rect.left, clientY - rect.top);
+      }
+
+      function draw(e) {
+        if (!desenhando) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "#1E3A8A";
+        ctx.lineTo(clientX - rect.left, clientY - rect.top);
+        ctx.stroke();
+      }
+
+      function endDraw() { desenhando = false; }
+
+      canvas.onmousedown = startDraw;
+      canvas.onmousemove = draw;
+      canvas.onmouseup = endDraw;
+
+      canvas.ontouchstart = (e) => { e.preventDefault(); startDraw(e); };
+      canvas.ontouchmove = (e) => { e.preventDefault(); draw(e); };
+      canvas.ontouchend = endDraw;
+
+      canvasesAtivos[codigo] = { canvas, ctx };
+    }
+
+    function limparCanvasAtivo(codigo) {
+      if (canvasesAtivos[codigo]) {
+        const { canvas, ctx } = canvasesAtivos[codigo];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function capturarFotoInline(event, codigo) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const img = new Image();
+        img.onload = function() {
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const cx = c.getContext("2d");
+          cx.drawImage(img, 0, 0);
+
+          const hoje = new Date().toLocaleDateString("pt-BR");
+          const texto = `OAT: ${obraAtiva.demanda} | ITEM: ${codigo} | DATA: ${hoje}`;
+          cx.fillStyle = "rgba(0, 0, 0, 0.65)";
+          cx.fillRect(20, c.height - 70, 750, 50);
+          cx.fillStyle = "#FFFFFF";
+          cx.font = "bold 24px Arial";
+          cx.fillText(texto, 35, c.height - 35);
+
+          const a = document.createElement("a");
+          const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
+          const dataNome = hoje.split("/").reverse().join("");
+          const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
+          a.download = `${idOAT}_MED${numMed}_${codigo}_${dataNome}_01.jpg`;
+          a.href = c.toDataURL("image/jpeg", 0.9);
+          a.click();
+          alert(`Fotografia gravada com sucesso na memória: ${a.download}`);
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // =========================================================================
+    // GESTÃO DA LIXEIRA
+    // =========================================================================
+    function moverObraParaLixeira() {
+      if (!obraAtiva) return;
 
       const confirma = confirm(`Deseja mover a OAT "${obraAtiva.demanda}" (${obraAtiva.nome}) para a lixeira?\n\nEla poderá ser restaurada a qualquer momento.`);
       if (!confirma) return;
@@ -360,10 +540,9 @@
       obrasCadastradas = obrasCadastradas.filter(o => o.uid !== obraAtiva.uid);
       localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
 
-      obraAtiva = obrasCadastradas[0];
+      obraAtiva = obrasCadastradas.length > 0 ? obrasCadastradas[0] : null;
+      codigoItemAberto = null;
       carregarSeletorObras();
-      document.getElementById("seletorObra").value = 0;
-      document.getElementById("seletorObra").dispatchEvent(new Event("change"));
 
       alert("OAT movida para a lixeira com sucesso!");
     }
@@ -395,9 +574,7 @@
       document.getElementById("modalLixeira").classList.remove("hidden");
     }
 
-    function fecharModalLixeira() {
-      document.getElementById("modalLixeira").classList.add("hidden");
-    }
+    function fecharModalLixeira() { document.getElementById("modalLixeira").classList.add("hidden"); }
 
     function restaurarObraDaLixeira(uid) {
       const idx = lixeiraObras.findIndex(o => o.uid === uid);
@@ -411,9 +588,9 @@
       localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
 
       fecharModalLixeira();
+      obraAtiva = obraRestaurada;
+      codigoItemAberto = null;
       carregarSeletorObras();
-      document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
-      document.getElementById("seletorObra").dispatchEvent(new Event("change"));
 
       alert(`OAT ${obraRestaurada.demanda} restaurada com sucesso!`);
     }
@@ -430,175 +607,10 @@
       }
     }
 
-    function popularFiltroGrupos() {
-      const sel = document.getElementById("filtroGrupo");
-      const grupos = ["TODOS", ...new Set(obraAtiva.itens.map(i => i.grupo))];
-      sel.innerHTML = "";
-      grupos.forEach(g => {
-        const opt = document.createElement("option");
-        opt.value = g;
-        opt.innerText = g;
-        sel.appendChild(opt);
-      });
-      document.getElementById("totalComposicoesTitulo").innerText = `Composições Orçamentárias (${obraAtiva.itens.length})`;
-    }
-
-    function renderizarLista() {
-      const container = document.getElementById("listaItens");
-      const busca = document.getElementById("buscaItem").value.toLowerCase();
-      const grupo = document.getElementById("filtroGrupo").value;
-
-      container.innerHTML = "";
-      obraAtiva.itens.forEach((item) => {
-        if (grupo !== "TODOS" && item.grupo !== grupo) return;
-        if (busca && !item.codigo.toLowerCase().includes(busca) && !item.desc.toLowerCase().includes(busca)) return;
-
-        const el = document.createElement("div");
-        const ativo = item.codigo === itemSelecionado.codigo;
-        el.className = `p-2.5 rounded-lg border cursor-pointer transition text-xs ${ativo ? 'bg-blue-50 border-blue-600' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`;
-        el.innerHTML = `
-          <div class="flex justify-between items-center mb-1">
-            <span class="font-bold text-blue-900">${item.codigo}</span>
-            <span class="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-mono">${item.qtd.toFixed(2)} ${item.un}</span>
-          </div>
-          <p class="text-slate-700 truncate">${item.desc}</p>
-        `;
-        el.onclick = () => selecionarItem(item);
-        container.appendChild(el);
-      });
-    }
-
-    function selecionarItem(item) {
-      itemSelecionado = item;
-      document.getElementById("itemAtivoCodigo").innerText = item.codigo;
-      document.getElementById("itemAtivoGrupo").innerText = item.grupo;
-      document.getElementById("itemAtivoDesc").innerText = item.desc;
-      document.getElementById("qtdContratada").innerText = `${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
-      
-      const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
-      const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
-      
-      document.getElementById("qtdAnterior").value = dadosSalvos.ant.toFixed(2);
-      document.getElementById("qtdPeriodo").value = dadosSalvos.per.toFixed(2);
-      document.getElementById("memoriaCalculo").value = dadosSalvos.mem;
-
-      atualizarCalculos();
-      renderizarLista();
-    }
-
-    function atualizarCalculos() {
-      const total = itemSelecionado.qtd;
-      const ant = parseFloat(document.getElementById("qtdAnterior").value) || 0;
-      const per = parseFloat(document.getElementById("qtdPeriodo").value) || 0;
-      const saldo = total - (ant + per);
-      const saldoEl = document.getElementById("qtdSaldo");
-
-      saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${itemSelecionado.un}`;
-      saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm" : "font-bold text-emerald-700 text-sm";
-    }
-
-    document.getElementById("btnSalvarFicha").onclick = () => {
-      const numMed = document.getElementById("medicaoNumero").value;
-      const chaveItem = `med_${obraAtiva.uid}_${itemSelecionado.codigo}_${numMed}`;
-      const dados = {
-        ant: parseFloat(document.getElementById("qtdAnterior").value) || 0,
-        per: parseFloat(document.getElementById("qtdPeriodo").value) || 0,
-        mem: document.getElementById("memoriaCalculo").value
-      };
-      localStorage.setItem(chaveItem, JSON.stringify(dados));
-      alert(`Medição do item ${itemSelecionado.codigo} salva com sucesso!`);
-    };
-
-    document.getElementById("qtdAnterior").addEventListener("input", atualizarCalculos);
-    document.getElementById("qtdPeriodo").addEventListener("input", atualizarCalculos);
-    document.getElementById("buscaItem").addEventListener("input", renderizarLista);
-    document.getElementById("filtroGrupo").addEventListener("change", renderizarLista);
-    document.getElementById("medicaoNumero").addEventListener("change", () => selecionarItem(itemSelecionado));
-
-    // Canvas de Croqui
-    const canvas = document.getElementById("sketchCanvas");
-    const ctx = canvas.getContext("2d");
-    let desenhando = false;
-
-    function resizeCanvas() {
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight - 35;
-    }
-    window.addEventListener("resize", resizeCanvas);
-
-    function startDraw(e) {
-      desenhando = true;
-      ctx.beginPath();
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
-      const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-      ctx.moveTo(x, y);
-    }
-
-    function draw(e) {
-      if (!desenhando) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
-      const y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.strokeStyle = "#1E3A8A";
-      ctx.lineTo(x, y);
-      ctx.stroke();
-    }
-
-    function endDraw() { desenhando = false; }
-
-    canvas.addEventListener("mousedown", startDraw);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", endDraw);
-    canvas.addEventListener("touchstart", startDraw);
-    canvas.addEventListener("touchmove", draw);
-    canvas.addEventListener("touchend", endDraw);
-
-    document.getElementById("btnLimparCanvas").onclick = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    };
-
-    // Foto com Data e Download Direto
-    document.getElementById("inputFoto").addEventListener("change", function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const img = new Image();
-        img.onload = function() {
-          const c = document.createElement("canvas");
-          c.width = img.width;
-          c.height = img.height;
-          const cx = c.getContext("2d");
-          cx.drawImage(img, 0, 0);
-
-          const hoje = new Date().toLocaleDateString("pt-BR");
-          const texto = `OAT: ${obraAtiva.demanda} | ITEM: ${itemSelecionado.codigo} | DATA: ${hoje}`;
-          cx.fillStyle = "rgba(0, 0, 0, 0.65)";
-          cx.fillRect(20, c.height - 70, 750, 50);
-          cx.fillStyle = "#FFFFFF";
-          cx.font = "bold 24px Arial";
-          cx.fillText(texto, 35, c.height - 35);
-
-          const a = document.createElement("a");
-          const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
-          const dataNome = hoje.split("/").reverse().join("");
-          const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-          a.download = `${idOAT}_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
-          a.href = c.toDataURL("image/jpeg", 0.9);
-          a.click();
-          alert(`Fotografia gravada com sucesso na memória: ${a.download}`);
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
-
-    // Relatório Oficial Espelho SGO
+    // Modal Relatório Oficial (Espelho SGO)
     function abrirModalRelatorio() {
+      if (!obraAtiva) return;
+
       const numMed = document.getElementById("medicaoNumero").value;
       document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | OAT ${obraAtiva.demanda} | Medição Nº ${numMed}`;
       const tbody = document.getElementById("corpoTabelaRelatorio");
@@ -629,11 +641,11 @@
       document.getElementById("modalRelatorio").classList.remove("hidden");
     }
 
-    function fecharModalRelatorio() {
-      document.getElementById("modalRelatorio").classList.add("hidden");
-    }
+    function fecharModalRelatorio() { document.getElementById("modalRelatorio").classList.add("hidden"); }
 
     function exportarCSVRelatorio() {
+      if (!obraAtiva) return;
+
       const numMed = document.getElementById("medicaoNumero").value;
       let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
 
@@ -657,7 +669,7 @@
     function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
 
     // =========================================================================
-    // EXTRATOR REFORMULADO DIRETO (SEM WORKER EXTERNO)
+    // EXTRATOR RESILIENTE PARA ORÇAMENTO DO SGO
     // =========================================================================
     document.getElementById("btnProcessarPDFs").onclick = async () => {
       const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
@@ -672,8 +684,6 @@
 
       try {
         const arrayBuffer = await fileOrcamento.arrayBuffer();
-        
-        // Carrega o documento desativando o worker para rodar direto na thread principal do tablet
         const loadingTask = pdfjsLib.getDocument({
           data: new Uint8Array(arrayBuffer),
           disableFontFace: true,
@@ -709,7 +719,6 @@
           todasLinhas.push(...pageLines);
         }
 
-        // Metadados
         const matchDemanda = textoTotal.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/" + new Date().getFullYear() + "/001"];
         const matchImovel = textoTotal.match(/Imóvel:\s*([^\n\r]+?)(?=\s*Município|\s*Cliente|$)/i) || ["", "PRÉDIO ESCOLAR"];
         const matchMunicipio = textoTotal.match(/Município:\s*([^\n\r]+?)(?=\s*Cliente|\s*Orçamento|$)/i) || ["", "RS"];
@@ -828,9 +837,9 @@
 
         setTimeout(() => {
           fecharModalNovaObra();
+          obraAtiva = novaObra;
+          codigoItemAberto = null;
           carregarSeletorObras();
-          document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
-          document.getElementById("seletorObra").dispatchEvent(new Event("change"));
           alert(`OAT ${novaObra.demanda} cadastrada com ${itens.length} composições com sucesso!`);
         }, 600);
 
@@ -857,11 +866,12 @@
       );
     }
 
+    document.getElementById("buscaItem").addEventListener("input", renderizarLista);
+    document.getElementById("filtroGrupo").addEventListener("change", renderizarLista);
+    document.getElementById("medicaoNumero").addEventListener("change", renderizarLista);
+
     setTimeout(() => {
       carregarSeletorObras();
-      popularFiltroGrupos();
-      selecionarItem(obraAtiva.itens[23] || obraAtiva.itens[0]);
-      resizeCanvas();
     }, 150);
   </script>
 </body>
