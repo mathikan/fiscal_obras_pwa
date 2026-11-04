@@ -18,7 +18,7 @@ window.extrairDadosOrcamentoSGO = async function(file) {
   let todasLinhas = [];
   let textoBruto = "";
 
-  // 1. Varrer páginas e ordenar espacialmente: Topo -> Fim (Y), Esquerda -> Direita (X)
+  // 1. Varrer páginas e ordenar espacialmente: Topo -> Fim (Y decrescente), Esquerda -> Direita (X crescente)
   for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
     const page = await pdf.getPage(pNum);
     const textContent = await page.getTextContent();
