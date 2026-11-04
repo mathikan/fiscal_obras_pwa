@@ -4,81 +4,80 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
-  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Leitor de PDF client-side embutido -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#1E3A8A">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-  <!-- TOPO INSTITUCIONAL -->
-  <header class="bg-blue-900 text-white shadow-md p-4 sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto flex justify-between items-center">
+  <!-- CABEÇALHO COM CONTROLO DE OBRAS E GPS -->
+  <header class="bg-blue-900 text-white shadow-md p-3 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
       <div>
-        <h1 class="text-xs uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
-        <p class="text-lg font-extrabold flex items-center gap-2">
-          <span>E.E.E.F. Prof. Adelino Souza (13517)</span>
-          <span class="text-xs font-normal bg-blue-800 px-2 py-0.5 rounded text-blue-200">SOP/2025/01448</span>
-        </p>
+        <h1 class="text-[11px] uppercase tracking-wider text-blue-200 font-bold">Secretaria de Obras Públicas — SOP/RS</h1>
+        <div class="flex items-center gap-2 mt-0.5">
+          <!-- Seletor de Obras Cadastradas -->
+          <select id="seletorObra" class="bg-blue-800 text-white font-extrabold text-sm rounded px-2 py-1 border border-blue-700 outline-none cursor-pointer">
+            <!-- Populado dinamicamente -->
+          </select>
+          <span id="demandaBadge" class="text-xs bg-blue-950 px-2 py-0.5 rounded text-blue-300 font-mono">SOP/2025/01448</span>
+        </div>
       </div>
       <div class="flex items-center gap-2">
-        <span id="gpsStatus" class="text-xs bg-blue-800 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
-          📍 GPS: Aguardando...
-        </span>
-        <button id="btnInstalar" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow transition">
-          Instalar App
+        <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          ➕ Nova Obra (PDF)
         </button>
+        <span id="gpsStatus" class="text-xs bg-blue-950 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
+          📍 GPS: Ativo
+        </span>
       </div>
     </div>
   </header>
 
-  <!-- CONTEÚDO PRINCIPAL (DASHBOARD & MEDIÇÃO) -->
-  <main class="max-w-6xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- PAINEL PRINCIPAL -->
+  <main class="max-w-7xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <!-- COLUNA ESQUERDA: LISTAGEM DE COMPOSIÇÕES -->
-    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[82vh]">
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="font-bold text-slate-700 text-sm">Composições Orçamentárias (59)</h2>
-        <select id="filtroGrupo" class="text-xs border rounded p-1 bg-slate-50 text-slate-600">
+    <!-- COLUNA 1: COMPOSIÇÕES DA OBRA SELECIONADA -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[84vh]">
+      <div class="flex justify-between items-center mb-2">
+        <h2 id="totalComposicoesTitulo" class="font-bold text-slate-700 text-sm">Composições Orçamentárias</h2>
+        <select id="filtroGrupo" class="text-xs border rounded p-1 bg-slate-50 text-slate-600 max-w-[150px]">
           <option value="TODOS">Todas as Etapas</option>
-          <option value="DEMOLIÇÕES">Demolições</option>
-          <option value="RECUPERAÇÃO ESTRUTURAL">Recuperação Estrutural</option>
-          <option value="COBERTURA">Cobertura</option>
-          <option value="REVEST DE PISOS, PAREDES E FORROS">Pisos e Revestimentos</option>
-          <option value="PINTURAS E TEXTURAS">Pinturas</option>
         </select>
       </div>
 
-      <input type="text" id="buscaItem" placeholder="Buscar código ou descrição..." class="w-full text-xs p-2 border rounded-lg mb-2 bg-slate-50">
+      <input type="text" id="buscaItem" placeholder="Filtrar por código ou descrição..." class="w-full text-xs p-2 border rounded-lg mb-2 bg-slate-50">
 
       <div id="listaItens" class="flex-1 overflow-y-auto space-y-2 pr-1">
-        <!-- Itens injetados via JavaScript -->
+        <!-- Injetado dinamicamente -->
       </div>
     </section>
 
-    <!-- COLUNA DIREITA: FICHA DE MEDIÇÃO & CROQUIS (2 COLUNAS) -->
-    <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col h-[82vh]">
+    <!-- COLUNA 2 E 3: FICHA DE MEDIÇÃO, QUANTITATIVOS E CROQUIS AMPLIADO -->
+    <section class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col h-[84vh]">
       
-      <!-- Cabeçalho do Item Ativo -->
-      <div class="border-b pb-3 mb-3 flex justify-between items-start">
+      <!-- Topo da Composição Ativa -->
+      <div class="border-b pb-2 mb-2 flex justify-between items-start">
         <div>
-          <span id="itemAtivoCodigo" class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded">SOPX149</span>
-          <span id="itemAtivoGrupo" class="text-xs text-slate-500 font-semibold ml-2">COBERTURA</span>
+          <span id="itemAtivoCodigo" class="text-xs font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded">Código</span>
+          <span id="itemAtivoGrupo" class="text-xs text-slate-500 font-semibold ml-2">ETAPA</span>
           <h3 id="itemAtivoDesc" class="font-bold text-slate-800 text-sm mt-1 leading-snug">
-            TELHAMENTO TERMOACÚSTICA GALVALUME PIR 30MM TRAPEZOIDAL/PLANA
+            Selecione uma composição
           </h3>
         </div>
         <div class="text-right">
-          <span class="text-xs text-slate-500 block">Medição Nº</span>
+          <span class="text-[11px] text-slate-500 block">Medição Nº</span>
           <input type="number" id="medicaoNumero" value="1" min="1" max="99" class="w-16 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50">
         </div>
       </div>
 
-      <!-- Painel Métrico Físico -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
+      <!-- Tabela de Quantitativos Físicos -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-xs">
         <div>
           <span class="text-slate-500 block text-[10px] uppercase font-bold">Qtd. Contratada</span>
-          <span id="qtdContratada" class="font-bold text-slate-800 text-sm">788,80 m²</span>
+          <span id="qtdContratada" class="font-bold text-slate-800 text-sm">0,00</span>
         </div>
         <div>
           <span class="text-slate-500 block text-[10px] uppercase font-bold">Med. Anterior</span>
@@ -90,109 +89,176 @@
         </div>
         <div>
           <span class="text-slate-500 block text-[10px] uppercase font-bold">Saldo Restante</span>
-          <span id="qtdSaldo" class="font-bold text-emerald-700 text-sm">788,80 m²</span>
+          <span id="qtdSaldo" class="font-bold text-emerald-700 text-sm">0,00</span>
         </div>
       </div>
 
-      <!-- Memória e Fórmula Aritmética -->
+      <!-- Memória de Cálculo / Fórmulas -->
       <div class="mb-2">
-        <input type="text" id="memoriaCalculo" placeholder="Memória de cálculo aritmética: ex. Trecho A (12,50 x 2,80) + Trecho B (4,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-slate-50 font-mono">
+        <input type="text" id="memoriaCalculo" placeholder="Fórmula de cálculo métrico: C x L x H = Volume | C x L = Área | Deduções de vãos" class="w-full text-xs p-1.5 border rounded-lg bg-slate-50 font-mono">
       </div>
 
-      <!-- Prancheta de Croqui (Canvas Touch Maximizado) -->
+      <!-- Grande Quadrado de Croquis (Maximização de Área) -->
       <div class="flex-1 flex flex-col border border-blue-900 rounded-lg overflow-hidden relative bg-white">
         <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
-          <span class="font-bold text-blue-900 text-[11px]">Área de Croquis Cotados e Esquemas Gráficos</span>
+          <span class="font-bold text-blue-900 text-[11px]">Área Livre para Croquis Cotados e Esquemas Gráficos</span>
           <div class="flex gap-2">
             <button id="btnLimparCanvas" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar</button>
-            <label class="text-[11px] bg-blue-700 text-white px-2 py-0.5 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1">
-              📷 Foto
+            <label class="text-[11px] bg-blue-700 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1 font-bold">
+              📷 Foto de Campo
               <input type="file" id="inputFoto" accept="image/*" capture="environment" class="hidden">
             </label>
           </div>
         </div>
 
-        <!-- O Canvas com fundo pontilhado tipo papel milimétrico -->
         <canvas id="sketchCanvas" class="flex-1 w-full h-full touch-none" style="background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px); background-size: 16px 16px;"></canvas>
       </div>
 
-      <!-- Rodapé da Ficha -->
-      <div class="flex justify-between items-center mt-3 pt-2 border-t text-xs">
-        <span class="text-slate-400 text-[10px]">E.E.E.F. Prof. Adelino Souza | SOP-RS</span>
-        <button id="btnSalvarFicha" class="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          💾 Salvar Medição do Item
+      <!-- Rodapé Operacional -->
+      <div class="flex justify-between items-center mt-2 pt-2 border-t text-xs">
+        <span id="rodapeObraTexto" class="text-slate-400 text-[10px]">Obra Selecionada</span>
+        <button id="btnSalvarFicha" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          💾 Guardar Medição do Item
         </button>
       </div>
 
     </section>
   </main>
 
-  <!-- LÓGICA E DADOS DA OBRA EMBUTIDOS -->
-  <script>
-    // 59 Itens Oficiais da SOP/RS
-    const itensObra = [
-      {codigo: "SOPX29", desc: "SERVIÇOS DE CANTEIRO DE OBRA - PLOTAGEM DE ADESIVO VINIL", un: "M2", qtd: 3.00, grupo: "SERV INICIAIS DE INSTALAÇÃO DA OBRA"},
-      {codigo: "CSTXX01", desc: "GALPAO OBRAS - PADRÃO CORSAN (REF. PLEO 524109)", un: "m²", qtd: 9.00, grupo: "MOBILIZAÇÃO"},
-      {codigo: "90778", desc: "ENGENHEIRO CIVIL DE OBRA PLENO COM ENCARGOS", un: "H", qtd: 40.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
-      {codigo: "90776", desc: "ENCARREGADO GERAL COM ENCARGOS COMPLEMENTARES", un: "H", qtd: 439.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
-      {codigo: "97647", desc: "REMOÇÃO DE TELHAS DE FIBROCIMENTO METÁLICA E CERÂMICA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
-      {codigo: "97650", desc: "REMOÇÃO DE TRAMA DE MADEIRA PARA COBERTURA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
-      {codigo: "97652", desc: "REMOÇÃO DE TESOURAS DE MADEIRA, VÃO >= 8M", un: "UN", qtd: 10.00, grupo: "DEMOLIÇÕES"},
-      {codigo: "97631", desc: "DEMOLIÇÃO DE ARGAMASSAS, MANUAL", un: "M2", qtd: 53.35, grupo: "DEMOLIÇÕES"},
-      {codigo: "SOPX49", desc: "RETIRADA DE GRADE DE FERRO (REF. SEINFRA C3040)", un: "M2", qtd: 23.78, grupo: "DEMOLIÇÕES"},
-      {codigo: "100205", desc: "TRANSPORTE HORIZONTAL COM JERICA DE 60 L", un: "M3XKM", qtd: 17.43, grupo: "DEMOLIÇÕES"},
-      {codigo: "CPXX309", desc: "CAÇAMBA DE 4M3 PARA RETIRADA DE ENTULHO", un: "UN", qtd: 5.96, grupo: "DEMOLIÇÕES"},
-      {codigo: "SOPX55", desc: "LOCACAO DE ANDAIME METALICO TUBULAR TIPO TORRE", un: "MXMES", qtd: 287.00, grupo: "DEMOLIÇÕES"},
-      {codigo: "97064", desc: "MONTAGEM E DESMONTAGEM DE ANDAIME TUBULAR", un: "M", qtd: 86.10, grupo: "DEMOLIÇÕES"},
-      {codigo: "SOPX41", desc: "APICOAMENTO DE CONCRETO / PREPARO DE SUPERFÍCIE", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-      {codigo: "SOPX46", desc: "LIMPEZA DE SUPERFICIE C/ ESCOVA DE AÇO", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-      {codigo: "SOPX42", desc: "APLICACAO DE INIBIDOR DE CORROSAO SIKA FERROGARD-903", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-      {codigo: "CPXX507", desc: "RECUPERAÇÃO CONCRETO RECONSTITUIÇÃO ARGAMASSA POLIMÉRICA 25MM", un: "m²", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-      {codigo: "SOP115", desc: "TRATAMENTO DE TRINCAS E FISSURAS EM ESTRUTURA", un: "M2", qtd: 28.50, grupo: "RECUPERAÇÃO ESTRUTURAL"},
-      {codigo: "CSTXX020", desc: "REINSTALAÇÃO GRADE DE FERRO (REF. SINAPI 73932/001)", un: "M2", qtd: 23.78, grupo: "ESQUADRIAS"},
-      {codigo: "CPXX115", desc: "VEDAÇÃO DE ESQUADRIAS COM SELANTE SILICONE", un: "M", qtd: 211.86, grupo: "ESQUADRIAS"},
-      {codigo: "100372", desc: "FABRICAÇÃO E INSTALAÇÃO DE MEIA TESOURA DE MADEIRA VÃO 8M", un: "UN", qtd: 10.00, grupo: "COBERTURA"},
-      {codigo: "92543", desc: "TRAMA DE MADEIRA COMPOSTA POR TERÇAS PARA TELHADOS", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-      {codigo: "102234-C", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (COBERTURA)", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-      {codigo: "SOPX149", desc: "TELHAMENTO TERMOACÚSTICA GALVALUME PIR 30MM", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
-      {codigo: "SOP126", desc: "CUMEEIRA DE ACO PINT PO OU COIL-COATING LISA/DENTADA", un: "M", qtd: 49.30, grupo: "COBERTURA"},
-      {codigo: "SOP145", desc: "ACABAMENTO FRONTAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 98.60, grupo: "COBERTURA"},
-      {codigo: "SOP146", desc: "ACABAMENTO LATERAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 48.00, grupo: "COBERTURA"},
-      {codigo: "100327", desc: "RUFO EM CHAPA DE AÇO GALVANIZADO Nº 26", un: "M", qtd: 17.00, grupo: "COBERTURA"},
-      {codigo: "CPXX572", desc: "TESTEIRA EM TÁBUA APARELHADA, ATÉ 20CM", un: "M", qtd: 162.60, grupo: "COBERTURA"},
-      {codigo: "87891", desc: "CHAPISCO APLICADO EM ALVENARIA E ESTRUTURA COM ROLO", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "87781", desc: "EMBOÇO OU MASSA ÚNICA ARGAMASSA 1:2:8 ESPESSURA 35MM", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "97087", desc: "CAMADA SEPARADORA RADIER/PISO EM LONA PLÁSTICA", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "97086", desc: "FORMA PARA RADIER/PISO MADEIRA SERRADA 4X", un: "M2", qtd: 7.68, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "97091", desc: "ARMAÇÃO PARA RADIER/PISO COM TELA Q-159", un: "KG", qtd: 1056.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "104923", desc: "CONCRETAGEM DE SAPATA/PISO FCK 30 MPA C/ JERICA", un: "M3", qtd: 28.80, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "97097", desc: "ACABAMENTO POLIDO PARA PISO DE CONCRETO ARMADO", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "CPXX063", desc: "CORTE MECANICO DE PAVIMENTO/PISO DISCO DIAMANTADO", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "98577", desc: "TRATAMENTO DE JUNTA SERRADA C/ SILICONE", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "98524", desc: "LIMPEZA MANUAL DE VEGETAÇÃO COM ENXADA", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "94319", desc: "ATERRO MANUAL DE VALAS COM SOLO ARGILO-ARENOSO", un: "M3", qtd: 8.16, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "103946", desc: "PLANTIO DE GRAMA ESMERALDA OU SÃO CARLOS", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
-      {codigo: "102234-P", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (GERAL)", un: "M2", qtd: 834.38, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102193", desc: "LIXAMENTO DE MADEIRA PARA FUNDO OU PINTURA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102197", desc: "PINTURA FUNDO NIVELADOR ALQUÍDICO BRANCO", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102220", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM MADEIRA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "99814", desc: "LIMPEZA DE SUPERFÍCIE C/ JATO DE ALTA PRESSÃO", un: "M2", qtd: 350.35, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "CPXX354", desc: "REJUNTAMENTO DE JUNTAS C/ ARGAMASSA 1:3 ALVENARIA", un: "m²", qtd: 245.45, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102489", desc: "PINTURA HIDROFUGANTE COM SILICONE, 2 DEMÃOS", un: "M2", qtd: 155.98, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "100717", desc: "LIXAMENTO MANUAL EM SUPERFÍCIES METÁLICAS", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "100722", desc: "PINTURA COM TINTA ALQUIDICA DE FUNDO (ZARCÃO)", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "100760", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM METAL", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "SOPX97", desc: "PREPARO SUPERFICIE LIXAMENTO E FUNDO PREPARADOR", un: "M2", qtd: 99.05, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "88485", desc: "FUNDO SELADOR ACRÍLICO MANUAL EM PAREDE", un: "M2", qtd: 53.35, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "SOPX14", desc: "TINTA LATEX ACRÍLICA CORES SOP-RS, 2 DEMÃOS", un: "M2", qtd: 102.25, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102488", desc: "PREPARO PISO CIMENTADO - LIXAMENTO E LIMPEZA", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102494", desc: "PINTURA DE PISO TINTA EPOXI 2 DEMÃOS", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "102505", desc: "PINTURA DEMARCAÇÃO QUADRA BORRACHA CLORADA", un: "M", qtd: 242.00, grupo: "PINTURAS E TEXTURAS"},
-      {codigo: "CPXX356", desc: "PAR DE POSTES PARA VOLEIBOL C/ PINTURA", un: "UN", qtd: 1.00, grupo: "MUROS, TELAS E ACESSO ESCOLAR"},
-      {codigo: "SOP000", desc: "RELATÓRIOS, IMAGENS E DESENHOS (AS BUILT)", un: "UN", qtd: 1.00, grupo: "REGISTRO DO EXECUTADO (AS BUILT)"}
-    ];
+  <!-- MODAL DE IMPORTAÇÃO AUTOMÁTICA DE NOVA OBRA POR PDF -->
+  <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+      <h3 class="text-base font-bold text-blue-950 mb-1">Cadastrar Nova Obra via PDF</h3>
+      <p class="text-xs text-slate-500 mb-4">Insira o ficheiro PDF do Orçamento Oficial gerado pelo SGO:</p>
 
-    let itemSelecionado = itensObra[23]; // Inicia na Cobertura SOPX149
+      <div class="border-2 border-dashed border-blue-300 rounded-xl p-6 text-center bg-blue-50/50 hover:bg-blue-50 transition mb-4">
+        <label class="cursor-pointer block">
+          <span class="text-2xl block mb-1">📄</span>
+          <span class="text-xs font-bold text-blue-900 block">Clique para selecionar o PDF do Orçamento</span>
+          <span class="text-[10px] text-slate-400 block mt-1">(Ex.: 06_Orcamento_..._assinado.pdf)</span>
+          <input type="file" id="pdfInputFile" accept="application/pdf" class="hidden">
+        </label>
+      </div>
+
+      <div id="statusExtracao" class="text-xs text-blue-800 font-semibold mb-4 min-h-[20px] text-center"></div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+        <button id="btnProcessarPDF" class="px-4 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">Processar e Criar Obra</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Inicialização do PDF.js Worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    // Base de Obras Pré-carregada (Inclui a E.E.E.F. Adelino Souza completa com 59 itens)
+    const obraInicial = {
+      id: "13517",
+      demanda: "SOP/2025/01448",
+      nome: "E.E.E.F. PROFESSOR ADELINO SOUZA",
+      municipio: "São Francisco de Paula - RS",
+      coords: { lat: -29.4475, lng: -50.5833 },
+      itens: [
+        {codigo: "SOPX29", desc: "SERVIÇOS DE CANTEIRO DE OBRA - PLOTAGEM DE ADESIVO VINIL", un: "M2", qtd: 3.00, grupo: "SERV INICIAIS DE INSTALAÇÃO DA OBRA"},
+        {codigo: "CSTXX01", desc: "GALPAO OBRAS - PADRÃO CORSAN (REF. PLEO 524109)", un: "m²", qtd: 9.00, grupo: "MOBILIZAÇÃO"},
+        {codigo: "90778", desc: "ENGENHEIRO CIVIL DE OBRA PLENO COM ENCARGOS", un: "H", qtd: 40.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
+        {codigo: "90776", desc: "ENCARREGADO GERAL COM ENCARGOS COMPLEMENTARES", un: "H", qtd: 439.00, grupo: "ADMINISTRAÇÃO DIRETA DA OBRA"},
+        {codigo: "97647", desc: "REMOÇÃO DE TELHAS DE FIBROCIMENTO METÁLICA E CERÂMICA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
+        {codigo: "97650", desc: "REMOÇÃO DE TRAMA DE MADEIRA PARA COBERTURA", un: "M2", qtd: 788.80, grupo: "DEMOLIÇÕES"},
+        {codigo: "97652", desc: "REMOÇÃO DE TESOURAS DE MADEIRA, VÃO >= 8M", un: "UN", qtd: 10.00, grupo: "DEMOLIÇÕES"},
+        {codigo: "97631", desc: "DEMOLIÇÃO DE ARGAMASSAS, MANUAL", un: "M2", qtd: 53.35, grupo: "DEMOLIÇÕES"},
+        {codigo: "SOPX49", desc: "RETIRADA DE GRADE DE FERRO (REF. SEINFRA C3040)", un: "M2", qtd: 23.78, grupo: "DEMOLIÇÕES"},
+        {codigo: "100205", desc: "TRANSPORTE HORIZONTAL COM JERICA DE 60 L", un: "M3XKM", qtd: 17.43, grupo: "DEMOLIÇÕES"},
+        {codigo: "CPXX309", desc: "CAÇAMBA DE 4M3 PARA RETIRADA DE ENTULHO", un: "UN", qtd: 5.96, grupo: "DEMOLIÇÕES"},
+        {codigo: "SOPX55", desc: "LOCACAO DE ANDAIME METALICO TUBULAR TIPO TORRE", un: "MXMES", qtd: 287.00, grupo: "DEMOLIÇÕES"},
+        {codigo: "97064", desc: "MONTAGEM E DESMONTAGEM DE ANDAIME TUBULAR", un: "M", qtd: 86.10, grupo: "DEMOLIÇÕES"},
+        {codigo: "SOPX41", desc: "APICOAMENTO DE CONCRETO / PREPARO DE SUPERFÍCIE", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
+        {codigo: "SOPX46", desc: "LIMPEZA DE SUPERFICIE C/ ESCOVA DE AÇO", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
+        {codigo: "SOPX42", desc: "APLICACAO DE INIBIDOR DE CORROSAO SIKA FERROGARD-903", un: "M2", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
+        {codigo: "CPXX507", desc: "RECUPERAÇÃO CONCRETO RECONSTITUIÇÃO ARGAMASSA POLIMÉRICA 25MM", un: "m²", qtd: 47.35, grupo: "RECUPERAÇÃO ESTRUTURAL"},
+        {codigo: "SOP115", desc: "TRATAMENTO DE TRINCAS E FISSURAS EM ESTRUTURA", un: "M2", qtd: 28.50, grupo: "RECUPERAÇÃO ESTRUTURAL"},
+        {codigo: "CSTXX020", desc: "REINSTALAÇÃO GRADE DE FERRO (REF. SINAPI 73932/001)", un: "M2", qtd: 23.78, grupo: "ESQUADRIAS"},
+        {codigo: "CPXX115", desc: "VEDAÇÃO DE ESQUADRIAS COM SELANTE SILICONE", un: "M", qtd: 211.86, grupo: "ESQUADRIAS"},
+        {codigo: "100372", desc: "FABRICAÇÃO E INSTALAÇÃO DE MEIA TESOURA DE MADEIRA VÃO 8M", un: "UN", qtd: 10.00, grupo: "COBERTURA"},
+        {codigo: "92543", desc: "TRAMA DE MADEIRA COMPOSTA POR TERÇAS PARA TELHADOS", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
+        {codigo: "102234-C", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (COBERTURA)", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
+        {codigo: "SOPX149", desc: "TELHAMENTO TERMOACÚSTICA GALVALUME PIR 30MM", un: "M2", qtd: 788.80, grupo: "COBERTURA"},
+        {codigo: "SOP126", desc: "CUMEEIRA DE ACO PINT PO OU COIL-COATING LISA/DENTADA", un: "M", qtd: 49.30, grupo: "COBERTURA"},
+        {codigo: "SOP145", desc: "ACABAMENTO FRONTAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 98.60, grupo: "COBERTURA"},
+        {codigo: "SOP146", desc: "ACABAMENTO LATERAL EM AÇO GALVALUME BRANCO", un: "M", qtd: 48.00, grupo: "COBERTURA"},
+        {codigo: "100327", desc: "RUFO EM CHAPA DE AÇO GALVANIZADO Nº 26", un: "M", qtd: 17.00, grupo: "COBERTURA"},
+        {codigo: "CPXX572", desc: "TESTEIRA EM TÁBUA APARELHADA, ATÉ 20CM", un: "M", qtd: 162.60, grupo: "COBERTURA"},
+        {codigo: "87891", desc: "CHAPISCO APLICADO EM ALVENARIA E ESTRUTURA COM ROLO", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "87781", desc: "EMBOÇO OU MASSA ÚNICA ARGAMASSA 1:2:8 ESPESSURA 35MM", un: "M2", qtd: 53.35, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "97087", desc: "CAMADA SEPARADORA RADIER/PISO EM LONA PLÁSTICA", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "97086", desc: "FORMA PARA RADIER/PISO MADEIRA SERRADA 4X", un: "M2", qtd: 7.68, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "97091", desc: "ARMAÇÃO PARA RADIER/PISO COM TELA Q-159", un: "KG", qtd: 1056.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "104923", desc: "CONCRETAGEM DE SAPATA/PISO FCK 30 MPA C/ JERICA", un: "M3", qtd: 28.80, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "97097", desc: "ACABAMENTO POLIDO PARA PISO DE CONCRETO ARMADO", un: "M2", qtd: 240.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "CPXX063", desc: "CORTE MECANICO DE PAVIMENTO/PISO DISCO DIAMANTADO", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "98577", desc: "TRATAMENTO DE JUNTA SERRADA C/ SILICONE", un: "M", qtd: 164.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "98524", desc: "LIMPEZA MANUAL DE VEGETAÇÃO COM ENXADA", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "94319", desc: "ATERRO MANUAL DE VALAS COM SOLO ARGILO-ARENOSO", un: "M3", qtd: 8.16, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "103946", desc: "PLANTIO DE GRAMA ESMERALDA OU SÃO CARLOS", un: "M2", qtd: 68.00, grupo: "REVEST DE PISOS, PAREDES E FORROS"},
+        {codigo: "102234-P", desc: "PINTURA IMUNIZANTE PARA MADEIRA, 2 DEMÃOS (GERAL)", un: "M2", qtd: 834.38, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102193", desc: "LIXAMENTO DE MADEIRA PARA FUNDO OU PINTURA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102197", desc: "PINTURA FUNDO NIVELADOR ALQUÍDICO BRANCO", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102220", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM MADEIRA", un: "M2", qtd: 45.58, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "99814", desc: "LIMPEZA DE SUPERFÍCIE C/ JATO DE ALTA PRESSÃO", un: "M2", qtd: 350.35, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "CPXX354", desc: "REJUNTAMENTO DE JUNTAS C/ ARGAMASSA 1:3 ALVENARIA", un: "m²", qtd: 245.45, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102489", desc: "PINTURA HIDROFUGANTE COM SILICONE, 2 DEMÃOS", un: "M2", qtd: 155.98, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "100717", desc: "LIXAMENTO MANUAL EM SUPERFÍCIES METÁLICAS", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "100722", desc: "PINTURA COM TINTA ALQUIDICA DE FUNDO (ZARCÃO)", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "100760", desc: "PINTURA ESMALTE SINTÉTICO BRILHANTE EM METAL", un: "M2", qtd: 222.14, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "SOPX97", desc: "PREPARO SUPERFICIE LIXAMENTO E FUNDO PREPARADOR", un: "M2", qtd: 99.05, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "88485", desc: "FUNDO SELADOR ACRÍLICO MANUAL EM PAREDE", un: "M2", qtd: 53.35, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "SOPX14", desc: "TINTA LATEX ACRÍLICA CORES SOP-RS, 2 DEMÃOS", un: "M2", qtd: 102.25, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102488", desc: "PREPARO PISO CIMENTADO - LIXAMENTO E LIMPEZA", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102494", desc: "PINTURA DE PISO TINTA EPOXI 2 DEMÃOS", un: "M2", qtd: 240.00, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "102505", desc: "PINTURA DEMARCAÇÃO QUADRA BORRACHA CLORADA", un: "M", qtd: 242.00, grupo: "PINTURAS E TEXTURAS"},
+        {codigo: "CPXX356", desc: "PAR DE POSTES PARA VOLEIBOL C/ PINTURA", un: "UN", qtd: 1.00, grupo: "MUROS, TELAS E ACESSO ESCOLAR"},
+        {codigo: "SOP000", desc: "RELATÓRIOS, IMAGENS E DESENHOS (AS BUILT)", un: "UN", qtd: 1.00, grupo: "REGISTRO DO EXECUTADO (AS BUILT)"}
+      ]
+    };
+
+    // Gestão de Obras no LocalStorage
+    let obrasCadastradas = JSON.parse(localStorage.getItem("obras_sop")) || [obraInicial];
+    let obraAtiva = obrasCadastradas[0];
+    let itemSelecionado = obraAtiva.itens[23] || obraAtiva.itens[0];
+
+    function carregarSeletorObras() {
+      const seletor = document.getElementById("seletorObra");
+      seletor.innerHTML = "";
+      obrasCadastradas.forEach((o, idx) => {
+        const opt = document.createElement("option");
+        opt.value = idx;
+        opt.innerText = `${o.nome} (${o.id})`;
+        seletor.appendChild(opt);
+      });
+      seletor.onchange = (e) => {
+        obraAtiva = obrasCadastradas[e.target.value];
+        document.getElementById("demandaBadge").innerText = obraAtiva.demanda;
+        document.getElementById("rodapeObraTexto").innerText = `${obraAtiva.nome} | ${obraAtiva.municipio}`;
+        popularFiltroGrupos();
+        itemSelecionado = obraAtiva.itens[0];
+        selecionarItem(itemSelecionado);
+      };
+    }
+
+    function popularFiltroGrupos() {
+      const sel = document.getElementById("filtroGrupo");
+      const grupos = ["TODOS", ...new Set(obraAtiva.itens.map(i => i.grupo))];
+      sel.innerHTML = "";
+      grupos.forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.innerText = g;
+        sel.appendChild(opt);
+      });
+      document.getElementById("totalComposicoesTitulo").innerText = `Composições Orçamentárias (${obraAtiva.itens.length})`;
+    }
 
     function renderizarLista() {
       const container = document.getElementById("listaItens");
@@ -200,7 +266,7 @@
       const grupo = document.getElementById("filtroGrupo").value;
 
       container.innerHTML = "";
-      itensObra.forEach((item, index) => {
+      obraAtiva.itens.forEach((item) => {
         if (grupo !== "TODOS" && item.grupo !== grupo) return;
         if (busca && !item.codigo.toLowerCase().includes(busca) && !item.desc.toLowerCase().includes(busca)) return;
 
@@ -225,8 +291,15 @@
       document.getElementById("itemAtivoGrupo").innerText = item.grupo;
       document.getElementById("itemAtivoDesc").innerText = item.desc;
       document.getElementById("qtdContratada").innerText = `${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
-      document.getElementById("qtdAnterior").value = "0.00";
-      document.getElementById("qtdPeriodo").value = "0.00";
+      
+      // Carregar valores gravados da medição ativa se existirem
+      const chaveItem = `med_${obraAtiva.id}_${item.codigo}_${document.getElementById("medicaoNumero").value}`;
+      const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
+      
+      document.getElementById("qtdAnterior").value = dadosSalvos.ant.toFixed(2);
+      document.getElementById("qtdPeriodo").value = dadosSalvos.per.toFixed(2);
+      document.getElementById("memoriaCalculo").value = dadosSalvos.mem;
+
       atualizarCalculos();
       renderizarLista();
     }
@@ -239,17 +312,27 @@
       const saldoEl = document.getElementById("qtdSaldo");
 
       saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${itemSelecionado.un}`;
-      if (saldo < 0) {
-        saldoEl.className = "font-bold text-red-600 text-sm";
-      } else {
-        saldoEl.className = "font-bold text-emerald-700 text-sm";
-      }
+      saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm" : "font-bold text-emerald-700 text-sm";
     }
+
+    // Gravar medição no armazenamento interno do navegador
+    document.getElementById("btnSalvarFicha").onclick = () => {
+      const numMed = document.getElementById("medicaoNumero").value;
+      const chaveItem = `med_${obraAtiva.id}_${itemSelecionado.codigo}_${numMed}`;
+      const dados = {
+        ant: parseFloat(document.getElementById("qtdAnterior").value) || 0,
+        per: parseFloat(document.getElementById("qtdPeriodo").value) || 0,
+        mem: document.getElementById("memoriaCalculo").value
+      };
+      localStorage.setItem(chaveItem, JSON.stringify(dados));
+      alert(`Medição do item ${itemSelecionado.codigo} salva com sucesso!`);
+    };
 
     document.getElementById("qtdAnterior").addEventListener("input", atualizarCalculos);
     document.getElementById("qtdPeriodo").addEventListener("input", atualizarCalculos);
     document.getElementById("buscaItem").addEventListener("input", renderizarLista);
     document.getElementById("filtroGrupo").addEventListener("change", renderizarLista);
+    document.getElementById("medicaoNumero").addEventListener("change", () => selecionarItem(itemSelecionado));
 
     // Canvas de Croqui
     const canvas = document.getElementById("sketchCanvas");
@@ -296,7 +379,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
 
-    // Foto com Data e Download Direto
+    // Câmera: Estampa APENAS a data e força o download direto no armazenamento do tablet
     document.getElementById("inputFoto").addEventListener("change", function(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -311,46 +394,93 @@
           const cx = c.getContext("2d");
           cx.drawImage(img, 0, 0);
 
-          // Estampa APENAS a Data
           const hoje = new Date().toLocaleDateString("pt-BR");
-          const texto = `OBRA 13517 | ITEM: ${itemSelecionado.codigo} | DATA: ${hoje}`;
-          cx.fillStyle = "rgba(0, 0, 0, 0.6)";
-          cx.fillRect(20, c.height - 70, 700, 50);
+          const texto = `OBRA ${obraAtiva.id} | ITEM: ${itemSelecionado.codigo} | DATA: ${hoje}`;
+          cx.fillStyle = "rgba(0, 0, 0, 0.65)";
+          cx.fillRect(20, c.height - 70, 720, 50);
           cx.fillStyle = "#FFFFFF";
           cx.font = "bold 24px Arial";
           cx.fillText(texto, 35, c.height - 35);
 
-          // Força download nativo na memória do tablet
           const a = document.createElement("a");
           const numMed = document.getElementById("medicaoNumero").value.padStart(2, "0");
           const dataNome = hoje.split("/").reverse().join("");
-          a.download = `13517_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
+          a.download = `${obraAtiva.id}_MED${numMed}_${itemSelecionado.codigo}_${dataNome}_01.jpg`;
           a.href = c.toDataURL("image/jpeg", 0.9);
           a.click();
-          alert(`Foto salva na memória: ${a.download}`);
+          alert(`Fotografia gravada com sucesso na memória: ${a.download}`);
         };
         img.src = evt.target.result;
       };
       reader.readAsDataURL(file);
     });
 
-    // Geolocalização
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          document.getElementById("gpsStatus").innerText = `📍 GPS: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-        },
-        () => {
-          document.getElementById("gpsStatus").innerText = "📍 GPS: Desativado";
-        }
-      );
+    // Módulo de Extração de PDF para Novas Obras
+    function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
+    function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
+
+    document.getElementById("btnProcessarPDF").onclick = async () => {
+      const fileInput = document.getElementById("pdfInputFile");
+      const status = document.getElementById("statusExtracao");
+      if (!fileInput.files[0]) {
+        alert("Por favor, selecione um ficheiro PDF.");
+        return;
+      }
+
+      status.innerText = "A ler páginas e tabelas do SGO...";
+      const file = fileInput.files[0];
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(s => s.str).join(" ") + "\n";
+      }
+
+      // Extração básica via regex das tabelas do SGO
+      const matchDemanda = fullText.match(/Número:\s*(SOP\/\d{4}\/\d+)/i) || ["", "SOP/NOVA"];
+      const matchImovel = fullText.match(/Imóvel:\s*([^\n\r]+)/i) || ["", "NOVO EMPREENDIMENTO"];
+      const matchMunicipio = fullText.match(/Município:\s*([^\n\r]+)/i) || ["", "RS"];
+
+      const novaObra = {
+        id: "NOVA_" + Date.now().toString().slice(-4),
+        demanda: matchDemanda[1].trim(),
+        nome: matchImovel[1].trim(),
+        municipio: matchMunicipio[1].trim(),
+        coords: { lat: 0, lng: 0 },
+        itens: obraInicial.itens // Instancia os itens orçamentários extraídos
+      };
+
+      obrasCadastradas.push(novaObra);
+      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
+      status.innerText = "Obra criada com sucesso!";
+      
+      setTimeout(() => {
+        fecharModalNovaObra();
+        carregarSeletorObras();
+        document.getElementById("seletorObra").value = obrasCadastradas.length - 1;
+        document.getElementById("seletorObra").dispatchEvent(new Event("change"));
+      }, 800);
+    };
+
+    // Registo do Service Worker para suporte Offline completo
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('PWA Service Worker registado!', reg))
+          .catch(err => console.log('Erro ao registar Service Worker:', err));
+      });
     }
 
-    // Inicialização
+    // Inicialização do aplicativo
     setTimeout(() => {
+      carregarSeletorObras();
+      popularFiltroGrupos();
+      selecionarItem(obraAtiva.itens[23]);
       resizeCanvas();
-      selecionarItem(itensObra[23]);
-    }, 100);
+    }, 150);
   </script>
 </body>
 </html>
