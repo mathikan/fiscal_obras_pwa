@@ -1,6 +1,7 @@
 /**
  * caderno-pdf.js - Gerador Oficial de Caderno de Medições (SOP/RS)
- * Diagramação lado a lado: Croqui Cotado (Esquerda) + Foto de Campo (Direita)
+ * Suporte a medições decimais/alfanuméricas (ex.: 1, 1.1, 1.2, 1-A)
+ * Diagramação A4: Folha Técnica com Croqui Cotado (Esquerda) + Fotografia (Direita)
  */
 
 window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
@@ -20,6 +21,11 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   const azulBorda = [191, 219, 254];
   const cinzaTexto = [71, 85, 105];
   const cinzaFundo = [248, 250, 252];
+
+  // Sanitização do rótulo para exibição e gravação de arquivo
+  const medStr = String(numMedicao).trim();
+  const rotuloMedicao = (/^\d+$/.test(medStr)) ? medStr.padStart(2, "0") : medStr;
+  const rotuloArquivo = medStr.replace(/[\/\\:\*\?"<>\|\s]/g, "_");
 
   // =========================================================================
   // PÁGINA 1: CAPA OFICIAL INSTITUCIONAL
@@ -43,7 +49,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(15, 23, 42);
-  doc.text(`BOLETIM DE MEDIÇÃO Nº ${String(numMedicao).padStart(2, "0")}`, 105, 62, { align: "center" });
+  doc.text(`BOLETIM DE MEDIÇÃO Nº ${rotuloMedicao}`, 105, 62, { align: "center" });
 
   // Bloco de Dados Cadastrais
   doc.setFontSize(9);
@@ -62,7 +68,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   doc.text(`Município: ${obra.municipio}`, 26, 121);
   doc.text(`Valor Contratual: R$ ${obra.valorGlobal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, 26, 129);
   doc.text(`Data da Vistoria: ${new Date().toLocaleDateString("pt-BR")}`, 26, 137);
-  doc.text(`Ambiente: Vistoria Técnica de Engenharia em Canteiro`, 26, 145);
+  doc.text(`Etapa / Medição: Rodada de Aferição Nº ${rotuloMedicao}`, 26, 145);
 
   // Termo de Encerramento e Assinaturas
   doc.line(30, 235, 95, 235);
@@ -84,10 +90,10 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...cinzaTexto);
-  doc.text(`${obra.nome} | OAT ${obra.demanda} | Medição Nº ${numMedicao}`, 14, 23);
+  doc.text(`${obra.nome} | OAT ${obra.demanda} | Medição Nº ${rotuloMedicao}`, 14, 23);
 
   const linhasTabela = obra.itens.map((it, idx) => {
-    const chaveItem = `med_${obra.uid}_${it.codigo}_${numMedicao}`;
+    const chaveItem = `med_${obra.uid}_${it.codigo}_${medStr}`;
     const d = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0 };
     const acum = d.ant + d.per;
     const saldo = it.qtd - acum;
@@ -128,15 +134,13 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   // PÁGINAS INDIVIDUAIS: FICHAS TÉCNICAS COM CROQUI E FOTO LADO A LADO
   // =========================================================================
   for (let it of obra.itens) {
-    const chaveItem = `med_${obra.uid}_${it.codigo}_${numMedicao}`;
+    const chaveItem = `med_${obra.uid}_${it.codigo}_${medStr}`;
     const d = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
     
-    // Recupera a foto salva no armazenamento local
-    const chaveFoto = `foto_${obra.uid}_${it.codigo}_${numMedicao}`;
+    const chaveFoto = `foto_${obra.uid}_${it.codigo}_${medStr}`;
     const fotoBase64 = localStorage.getItem(chaveFoto);
 
-    // Recupera o desenho do croqui pelo canvas ativo ou cache
-    const chaveCroqui = `croqui_${obra.uid}_${it.codigo}_${numMedicao}`;
+    const chaveCroqui = `croqui_${obra.uid}_${it.codigo}_${medStr}`;
     let croquiBase64 = localStorage.getItem(chaveCroqui);
     if (!croquiBase64) {
       const canvasEl = document.getElementById(`canvas_${it.codigo}`);
@@ -145,11 +149,9 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       }
     }
 
-    // Gera folha técnica se o item teve medição no período, memória escrita ou evidência visual
     if (d.per > 0 || d.mem || fotoBase64) {
       doc.addPage();
 
-      // Cabeçalho da Ficha
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.setTextColor(...azulEscuro);
@@ -160,7 +162,6 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       doc.setTextColor(15, 23, 42);
       doc.text(`Etapa: ${it.grupo}  |  Serviço: ${it.desc}`, 14, 22, { maxWidth: 182 });
 
-      // Faixa Métrica de Quantitativos
       doc.setFillColor(...cinzaFundo);
       doc.setDrawColor(...azulBorda);
       doc.roundedRect(14, 28, 182, 14, 1.5, 1.5, "FD");
@@ -169,7 +170,6 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       const txtMetrico = `Contratado: ${it.qtd.toFixed(2)} ${it.un}    |    Med. Anterior: ${d.ant.toFixed(2)} ${it.un}    |    Nesta Medição: ${d.per.toFixed(2)} ${it.un}    |    Saldo: ${(it.qtd - (d.ant + d.per)).toFixed(2)} ${it.un}`;
       doc.text(txtMetrico, 18, 37);
 
-      // Caixa de Memória Aritmética
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(...azulEscuro);
@@ -179,16 +179,12 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       doc.setTextColor(15, 23, 42);
       doc.text(d.mem || "Medição aferida por conferência métrica visual direta em canteiro de obras.", 14, 56, { maxWidth: 182 });
 
-      // =====================================================================
-      // ÁREA VISUAL: QUADRO DUPLO LADO A LADO (LARGURA TOTAL = 182 mm)
-      // Caixa 1 (Croqui): X=14 mm, W=88 mm, H=105 mm
-      // Caixa 2 (Foto):   X=108 mm, W=88 mm, H=105 mm
-      // =====================================================================
+      // Área Visual Dupla Lado a Lado
       const boxY = 66;
       const boxW = 88;
       const boxH = 105;
 
-      // --- LADO ESQUERDO: CROQUI COTADO ---
+      // Lado Esquerdo: Croqui
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
@@ -207,7 +203,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
         doc.text("Nenhum croqui registrado", 14 + (boxW / 2), boxY + (boxH / 2), { align: "center" });
       }
 
-      // --- LADO DIREITO: FOTOGRAFIA DE CAMPO ---
+      // Lado Direito: Fotografia
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
@@ -226,7 +222,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
         doc.text("Nenhuma fotografia anexada", 108 + (boxW / 2), boxY + (boxH / 2), { align: "center" });
       }
 
-      // Notas Técnicas do Item / Parecer
+      // Notas e Parecer
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
@@ -237,18 +233,17 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       doc.setTextColor(51, 65, 85);
       doc.text("Serviço executado em conformidade com as especificações técnicas, projetos executivos e normas regulamentadoras vigentes no Estado do Rio Grande do Sul.", 14, 188, { maxWidth: 182 });
 
-      // Rodapé da Folha Individual
+      // Rodapé
       doc.setDrawColor(226, 232, 240);
       doc.line(14, 280, 196, 280);
       doc.setFontSize(7);
       doc.setTextColor(...cinzaTexto);
-      doc.text(`Caderno Oficial de Fiscalização SOP/RS — OAT: ${obra.demanda} — Medição Nº ${numMedicao}`, 14, 285);
+      doc.text(`Caderno Oficial de Fiscalização SOP/RS — OAT: ${obra.demanda} — Medição Nº ${rotuloMedicao}`, 14, 285);
       doc.text(`Folha Técnica: Item ${it.codigo}`, 196, 285, { align: "right" });
     }
   }
 
-  // Gera o nome padronizado do arquivo e dispara o download nativo
   const idOAT = obra.demanda.replace(/[\/\\]/g, "_");
-  const nomeArquivo = `Caderno_Fiscalizacao_${idOAT}_MED${String(numMedicao).padStart(2, "0")}.pdf`;
+  const nomeArquivo = `Caderno_Fiscalizacao_${idOAT}_MED${rotuloArquivo}.pdf`;
   doc.save(nomeArquivo);
 };
