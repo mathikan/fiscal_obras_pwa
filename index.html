@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS para ler Excel (.xlsx / .xls) e CSV -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- PDF.js via CDN Oficial sem worker externo -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <!-- jsPDF e AutoTable para geração do Caderno Oficial -->
@@ -48,8 +50,8 @@
         <button id="btnEspelhoSGO" onclick="abrirModalRelatorio()" class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           📊 Espelho SGO
         </button>
-        <button onclick="abrirModalNovaObra()" class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          ➕ Inserir OAT (PDF)
+        <button onclick="abrirModalNovaObra()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
+          📊 Inserir Orçamento (Excel/PDF)
         </button>
         <span id="gpsStatus" class="text-xs bg-blue-950 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
           📍 GPS: Ativo
@@ -87,7 +89,39 @@
 
   </main>
 
-  <!-- MODAL: HISTÓRICO & RECOVERY POR DATA/HORA -->
+  <!-- MODAL: NOVA OBRA / OAT VIA EXCEL OU PDF -->
+  <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+      <div class="flex justify-between items-start mb-3">
+        <div>
+          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT / Orçamento</h3>
+          <p class="text-xs text-slate-500">Selecione a Planilha Excel (.xlsx, .xls) ou PDF oficial:</p>
+        </div>
+        <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div class="border-2 border-dashed border-emerald-300 rounded-xl p-5 bg-emerald-50/50 text-center mb-3">
+        <label class="block cursor-pointer">
+          <span class="text-4xl block mb-2">📊</span>
+          <span class="text-xs font-bold text-emerald-950 block mb-1">Clique para selecionar a Planilha Excel (.xlsx) ou PDF</span>
+          <span class="text-[10px] text-slate-500 block mb-3">Lê a aba "ORÇ ESC 1ª FASE" com as colunas D, E, H, I, J</span>
+          <input type="file" id="arquivoOrcamentoInput" accept=".xlsx, .xls, .csv, application/pdf" class="hidden">
+        </label>
+        <span id="nomeArquivoSelecionado" class="text-xs font-semibold text-slate-700 block truncate"></span>
+      </div>
+
+      <div id="statusExtracao" class="text-xs text-blue-800 font-semibold mb-4 min-h-[20px] text-center"></div>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+        <button id="btnProcessarArquivo" class="px-5 py-2 text-xs font-bold bg-emerald-800 text-white hover:bg-emerald-700 rounded-lg shadow">
+          Processar e Cadastrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HISTÓRICO & RECOVERY -->
   <div id="modalRecovery" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[82vh]">
       <div class="flex justify-between items-start border-b pb-3 mb-3">
@@ -107,37 +141,6 @@
         <span class="text-slate-400 text-[11px]">Snapshots gravados localmente por segurança</span>
         <button onclick="fecharModalRecovery()" class="px-4 py-1.5 font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg">
           Fechar
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL: NOVA OBRA / OAT VIA PDF -->
-  <div id="modalNovaObra" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
-      <div class="flex justify-between items-start mb-3">
-        <div>
-          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT / Obra</h3>
-          <p class="text-xs text-slate-500">Selecione o PDF do Orçamento Oficial gerado pelo SGO:</p>
-        </div>
-        <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
-      </div>
-
-      <div class="border-2 border-dashed border-blue-300 rounded-xl p-5 bg-blue-50/50 text-center mb-3">
-        <label class="block cursor-pointer">
-          <span class="text-3xl block mb-1">📄</span>
-          <span class="text-xs font-bold text-blue-900 block mb-1">Clique para selecionar o PDF do Orçamento</span>
-          <span class="text-[10px] text-slate-500 block mb-3">(Ex.: 06_Orcamento_..._assinado.pdf)</span>
-          <input type="file" id="pdfOrcamentoInput" accept="application/pdf" class="hidden">
-        </label>
-      </div>
-
-      <div id="statusExtracao" class="text-xs text-blue-800 font-semibold mb-4 min-h-[20px] text-center"></div>
-
-      <div class="flex justify-end gap-2">
-        <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
-        <button id="btnProcessarPDFs" class="px-5 py-2 text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 rounded-lg shadow">
-          Processar e Cadastrar OAT
         </button>
       </div>
     </div>
@@ -311,33 +314,27 @@
       const container = document.getElementById("listaItens");
       container.innerHTML = `
         <div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center max-w-lg mx-auto my-12 shadow-sm">
-          <div class="text-5xl mb-3">📁</div>
-          <h3 class="text-base font-bold text-slate-800 mb-1">Nenhuma Obra / OAT Cadastrada</h3>
+          <div class="text-5xl mb-3">📊</div>
+          <h3 class="text-base font-bold text-slate-800 mb-1">Nenhum Orçamento Cadastrado</h3>
           <p class="text-xs text-slate-500 mb-6 leading-relaxed">
-            O sistema está pronto para uso em campo. Insira o PDF do orçamento oficial expedido pelo SGO para carregar as composições, quantitativos e cronograma.
+            Selecione a Planilha Excel (.xlsx) da obra com a aba "ORÇ ESC 1ª FASE" ou o PDF oficial para carregar as composições e medições.
           </p>
-          <button onclick="abrirModalNovaObra()" class="bg-blue-900 hover:bg-blue-800 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md transition inline-flex items-center gap-2">
-            <span>➕</span> Inserir Primeira OAT (PDF)
+          <button onclick="abrirModalNovaObra()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md transition inline-flex items-center gap-2">
+            <span>➕</span> Inserir Orçamento (Excel/PDF)
           </button>
         </div>
       `;
     }
 
     // =========================================================================
-    // MOTOR DE SNAPSHOTS TEMPORAIS (POINT-IN-TIME RECOVERY)
+    // SNAPSHOTS TEMPORAIS (POINT-IN-TIME RECOVERY)
     // =========================================================================
     function registrarSnapshotAutomatico(motivo) {
       if (!obraAtiva) return;
 
       const numMed = obterMedicaoAtualLimpa();
-      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
-      let historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
-
-      let dadosMedicaoAtual = {};
-      obraAtiva.itens.forEach(it => {
-        const chaveItem = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const chaveCroqui = `croqui_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const chaveFoto = `foto_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`; let historico = JSON.parse(localStorage.getItem(chaveHistorico)) \vert{}\vert{} [];  let dadosMedicaoAtual = {}; obraAtiva.itens.forEach(it => { const chaveItem = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+        const chaveCroqui = `croqui_${obraAtiva.uid}_${it.codigo}_${numMed}`; const chaveFoto = `foto_${obraAtiva.uid}_${it.codigo}_${numMed}`;
 
         const dadosSalvos = localStorage.getItem(chaveItem);
         if (dadosSalvos) dadosMedicaoAtual[chaveItem] = dadosSalvos;
@@ -372,25 +369,14 @@
       const numMed = obterMedicaoAtualLimpa();
       const descricao = prompt("Dê um nome para este ponto de recuperação:", `Marco de Conferência Medição ${numMed}`);
       if (descricao) {
-        registrarSnapshotAutomatico(`📸 Marco Manual: ${descricao}`);
-        alert("Ponto de restauração salvo com sucesso!");
-      }
-    }
-
-    function abrirModalRecovery() {
-      if (!obraAtiva) return;
-
-      const container = document.getElementById("listaSnapshots");
-      container.innerHTML = "";
-
-      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
+        registrarSnapshotAutomatico(`📸 Marco Manual: ${descricao}`); alert("Ponto de restauração salvo com sucesso!"); } }  function abrirModalRecovery() { if (!obraAtiva) return;  const container = document.getElementById("listaSnapshots"); container.innerHTML = "";  const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
       const historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
 
       if (historico.length === 0) {
         container.innerHTML = `
           <div class="text-center py-8 text-slate-400 text-xs">
             Nenhum ponto de restauração anterior gravado para esta OAT ainda.<br>
-            Os pontos são criados automaticamente a cada salvamento de medição ou pelo botão "Criar Ponto de Restauração".
+            Os pontos são criados automaticamente a cada salvamento de medição.
           </div>
         `;
       } else {
@@ -402,590 +388,7 @@
             <div>
               <div class="flex items-center gap-2 mb-0.5">
                 <span class="font-bold text-slate-800">${snap.carimbo}</span>
-                <span class="text-[10px] bg-teal-100 text-teal-900 font-bold px-1.5 py-0.2 rounded">Medição ${snap.numMedicao}</span>
-                ${idx === 0 ? '<span class="text-[9px] bg-slate-200 text-slate-700 px-1 rounded font-semibold">Mais recente</span>' : ''}
+                <span class="text-[10px] bg-teal-100 text-teal-900 font-bold px-1.5 py-0.2 rounded">Medição ${snap.numMedicao}</span>${idx === 0 ? '<span class="text-[9px] bg-slate-200 text-slate-700 px-1 rounded font-semibold">Mais recente</span>' : ''}
               </div>
               <p class="text-slate-500 text-[11px]">${snap.motivo}</p>
             </div>
-            <button onclick="restaurarSnapshot('${snap.id}')" class="bg-teal-700 hover:bg-teal-600 text-white font-bold px-3 py-1.5 rounded-lg shadow text-xs transition">
-              Restaurar
-            </button>
-          `;
-          container.appendChild(div);
-        });
-      }
-
-      document.getElementById("modalRecovery").classList.remove("hidden");
-    }
-
-    function fecharModalRecovery() {
-      document.getElementById("modalRecovery").classList.add("hidden");
-    }
-
-    function restaurarSnapshot(snapshotId) {
-      const chaveHistorico = `historico_snapshots_${obraAtiva.uid}`;
-      const historico = JSON.parse(localStorage.getItem(chaveHistorico)) || [];
-      const snap = historico.find(s => s.id === snapshotId);
-
-      if (!snap) return;
-
-      const confirma = confirm(`Deseja reverter todas as medições para o estado de:\n\n${snap.carimbo} (${snap.motivo})?\n\nAs medições atuais serão substituídas pelas medições gravadas naquela data.`);
-      if (!confirma) return;
-
-      registrarSnapshotAutomatico("Snapshot automático antes da restauração de histórico");
-
-      Object.keys(snap.dados).forEach(k => {
-        localStorage.setItem(k, snap.dados[k]);
-      });
-
-      document.getElementById("medicaoNumero").value = snap.numMedicao;
-
-      fecharModalRecovery();
-      codigoItemAberto = null;
-      renderizarLista();
-
-      alert(`Medições revertidas com sucesso para a data: ${snap.carimbo}!`);
-    }
-
-    // =========================================================================
-    // RENDERIZADOR SANFONA INLINE (COM MED. ANTERIOR \ SALDO ACUMULADO)
-    // =========================================================================
-    function renderizarLista() {
-      if (!obraAtiva) {
-        renderizarEstadoVazio();
-        return;
-      }
-
-      const container = document.getElementById("listaItens");
-      const busca = document.getElementById("buscaItem").value.toLowerCase();
-      const grupo = document.getElementById("filtroGrupo").value;
-      const numMed = obterMedicaoAtualLimpa();
-
-      container.innerHTML = "";
-      
-      const itensFiltrados = obraAtiva.itens.filter(item => {
-        if (grupo !== "TODOS" && item.grupo !== grupo) return false;
-        if (busca && !item.codigo.toLowerCase().includes(busca) && !item.desc.toLowerCase().includes(busca)) return false;
-        return true;
-      });
-
-      itensFiltrados.forEach((item) => {
-        const isAberto = item.codigo === codigoItemAberto;
-        const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${numMed}`;
-        const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
-        const acumSalvo = dadosSalvos.ant + dadosSalvos.per;
-        const saldoSalvo = item.qtd - acumSalvo;
-
-        const chaveFoto = `foto_${obraAtiva.uid}_${item.codigo}_${numMed}`;
-        const fotoSalva = localStorage.getItem(chaveFoto);
-
-        const itemWrapper = document.createElement("div");
-        itemWrapper.className = `rounded-xl border transition shadow-sm overflow-hidden ${isAberto ? 'border-blue-700 bg-white ring-2 ring-blue-500/20' : 'border-slate-200 bg-white hover:border-slate-300'}`;
-
-        const itemCard = document.createElement("div");
-        itemCard.className = "p-3 cursor-pointer flex justify-between items-center select-none";
-        itemCard.onclick = () => alternarGavetaItem(item.codigo);
-
-        itemCard.innerHTML = `
-          <div class="flex-1 pr-3">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="font-bold text-xs px-2 py-0.5 rounded ${isAberto ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-900'}">${item.codigo}</span>
-              <span class="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">${item.grupo}</span>
-              ${dadosSalvos.per > 0 ? '<span class="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">Medido: ' + dadosSalvos.per.toFixed(2) + '</span>' : ''}
-              ${fotoSalva ? '<span class="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded">📷 Foto Anexada</span>' : ''}
-            </div>
-            <p class="text-xs font-semibold text-slate-800 leading-snug">${item.desc}</p>
-          </div>
-          <div class="text-right flex items-center gap-3">
-            <div>
-              <span class="text-xs font-mono font-bold text-slate-700 block">${item.qtd.toFixed(2)} ${item.un}</span>
-              <span class="text-[10px] ${saldoSalvo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'} block">Saldo: ${saldoSalvo.toFixed(2)}</span>
-            </div>
-            <span class="text-slate-400 font-bold text-sm transform transition ${isAberto ? 'rotate-180 text-blue-700' : ''}">▼</span>
-          </div>
-        `;
-
-        itemWrapper.appendChild(itemCard);
-
-        if (isAberto) {
-          const gaveta = document.createElement("div");
-          gaveta.className = "border-t border-slate-200 bg-slate-50/70 p-4 space-y-3";
-
-          gaveta.innerHTML = `
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-              <!-- QTD CONTRATADA -->
-              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
-                <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Contrato</span>
-                <span class="font-bold text-slate-800 text-sm mt-1">${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
-              </div>
-
-              <!-- MED. ANTERIOR \ SALDO ACUMULADO (COM DADOS SALVOS) -->
-              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
-                <div class="flex justify-between items-baseline mb-1">
-                  <span class="text-slate-500 block text-[10px] uppercase font-bold">Med. Anterior</span>
-                  <span class="text-[9px] text-slate-400">Salvo: ${dadosSalvos.ant.toFixed(2)}</span>
-                </div>
-                <input type="number" id="inline_ant_${item.codigo}" value="${dadosSalvos.ant.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-slate-50 text-xs">
-                <div class="mt-1.5 pt-1 border-t border-slate-100 flex justify-between items-center text-[10px]">
-                  <span class="text-slate-400 font-semibold uppercase">Acumulado:</span>
-                  <span id="inline_acum_${item.codigo}" class="font-bold text-slate-700 font-mono">${acumSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
-                </div>
-              </div>
-
-              <!-- MEDIÇÃO ATUAL -->
-              <div class="bg-white p-2 rounded-lg border-2 border-blue-600 flex flex-col justify-between">
-                <div class="flex justify-between items-baseline mb-1">
-                  <span class="text-blue-700 block text-[10px] uppercase font-bold">Medição Atual (${numMed})</span>
-                  <span class="text-[9px] text-blue-600 font-semibold">Salvo: ${dadosSalvos.per.toFixed(2)}</span>
-                </div>
-                <input type="number" id="inline_per_${item.codigo}" value="${dadosSalvos.per.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-extrabold text-blue-900 bg-blue-50/30 text-xs">
-                <div class="mt-1.5 pt-1 border-t border-blue-100 text-[10px] text-blue-600 font-semibold text-right">
-                  Aferição em canteiro
-                </div>
-              </div>
-
-              <!-- SALDO RESTANTE -->
-              <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
-                <span class="text-slate-400 block text-[10px] uppercase font-bold">Saldo Restante</span>
-                <span id="inline_saldo_${item.codigo}" class="font-bold ${saldoSalvo < 0 ? 'text-red-600' : 'text-emerald-700'} text-sm mt-1">${saldoSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
-                <div class="mt-1.5 pt-1 border-t border-slate-100 text-[10px] text-slate-400 text-right">
-                  Diferença contratual
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo: Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
-            </div>
-
-            <!-- Área de Croquis Cotado -->
-            <div class="border border-blue-900 rounded-lg overflow-hidden bg-white shadow-inner">
-              <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
-                <span class="font-bold text-blue-900 text-[11px]">Área de Desenho Cotado e Esquemas Gráficos</span>
-                <div class="flex gap-2">
-                  <button onclick="limparCanvasAtivo('${item.codigo}')" class="text-[11px] text-red-600 hover:text-red-800 font-semibold">Limpar Croqui</button>
-                  <label class="text-[11px] bg-blue-700 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-blue-600 flex items-center gap-1 font-bold">
-                    📷 Tirar Foto (Data)
-                    <input type="file" accept="image/*" capture="environment" class="hidden" onchange="capturarFotoInline(event, '${item.codigo}')">
-                  </label>
-                </div>
-              </div>
-              <canvas id="canvas_${item.codigo}" class="w-full h-72 touch-none block" style="background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px); background-size: 16px 16px;"></canvas>
-            </div>
-
-            <div class="flex justify-between items-center pt-2">
-              <span id="statusFoto_${item.codigo}" class="text-[10px] text-slate-500 font-semibold">${fotoSalva ? '✅ Foto de campo anexada para o Caderno PDF' : 'Nenhuma foto anexada ainda'}</span>
-              <button onclick="salvarMedicaoInline('${item.codigo}')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold shadow text-xs flex items-center gap-1 transition">
-                💾 Salvar Medição do Item
-              </button>
-            </div>
-          `;
-
-          itemWrapper.appendChild(gaveta);
-        }
-
-        container.appendChild(itemWrapper);
-
-        if (isAberto) {
-          setTimeout(() => {
-            inicializarCanvasInline(item.codigo);
-            vincularCalculosInline(item);
-          }, 50);
-        }
-      });
-    }
-
-    function alternarGavetaItem(codigo) {
-      codigoItemAberto = (codigoItemAberto === codigo) ? null : codigo;
-      renderizarLista();
-    }
-
-    function vincularCalculosInline(item) {
-      const inAnt = document.getElementById(`inline_ant_${item.codigo}`);
-      const inPer = document.getElementById(`inline_per_${item.codigo}`);
-      const acumEl = document.getElementById(`inline_acum_${item.codigo}`);
-      const saldoEl = document.getElementById(`inline_saldo_${item.codigo}`);
-
-      function recalcular() {
-        const total = item.qtd;
-        const ant = parseFloat(inAnt.value) || 0;
-        const per = parseFloat(inPer.value) || 0;
-        const acum = ant + per;
-        const saldo = total - acum;
-
-        if (acumEl) {
-          acumEl.innerText = `${acum.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
-        }
-        if (saldoEl) {
-          saldoEl.innerText = `${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}`;
-          saldoEl.className = saldo < 0 ? "font-bold text-red-600 text-sm mt-1" : "font-bold text-emerald-700 text-sm mt-1";
-        }
-      }
-
-      if (inAnt && inPer) {
-        inAnt.addEventListener("input", recalcular);
-        inPer.addEventListener("input", recalcular);
-      }
-    }
-
-    function salvarMedicaoInline(codigo) {
-      const numMed = obterMedicaoAtualLimpa();
-      const chaveItem = `med_${obraAtiva.uid}_${codigo}_${numMed}`;
-      const inAnt = document.getElementById(`inline_ant_${codigo}`);
-      const inPer = document.getElementById(`inline_per_${codigo}`);
-      const inMem = document.getElementById(`inline_mem_${codigo}`);
-
-      const dados = {
-        ant: parseFloat(inAnt.value) || 0,
-        per: parseFloat(inPer.value) || 0,
-        mem: inMem.value || ""
-      };
-      localStorage.setItem(chaveItem, JSON.stringify(dados));
-
-      const canvasEl = document.getElementById(`canvas_${codigo}`);
-      if (canvasEl) {
-        const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
-        localStorage.setItem(chaveCroqui, canvasEl.toDataURL("image/png"));
-      }
-
-      registrarSnapshotAutomatico(`Alteração salva no item ${codigo}`);
-
-      alert(`Medição do item ${codigo} salva com sucesso para a Medição ${numMed}!`);
-      renderizarLista();
-    }
-
-    // =========================================================================
-    // CANVAS DE CROQUIS TOUCH / STYLUS
-    // =========================================================================
-    function inicializarCanvasInline(codigo) {
-      const canvas = document.getElementById(`canvas_${codigo}`);
-      if (!canvas) return;
-
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = 288;
-      const ctx = canvas.getContext("2d");
-      let desenhando = false;
-
-      const numMed = obterMedicaoAtualLimpa();
-      const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
-      const croquiSalvo = localStorage.getItem(chaveCroqui);
-      if (croquiSalvo) {
-        const img = new Image();
-        img.onload = () => ctx.drawImage(img, 0, 0);
-        img.src = croquiSalvo;
-      }
-
-      function startDraw(e) {
-        desenhando = true;
-        ctx.beginPath();
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-        ctx.moveTo(clientX - rect.left, clientY - rect.top);
-      }
-
-      function draw(e) {
-        if (!desenhando) return;
-        const rect = canvas.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-        const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-        ctx.lineWidth = 2;
-        ctx.lineCap = "round";
-        ctx.strokeStyle = "#1E3A8A";
-        ctx.lineTo(clientX - rect.left, clientY - rect.top);
-        ctx.stroke();
-      }
-
-      function endDraw() { desenhando = false; }
-
-      canvas.onmousedown = startDraw;
-      canvas.onmousemove = draw;
-      canvas.onmouseup = endDraw;
-
-      canvas.ontouchstart = (e) => { e.preventDefault(); startDraw(e); };
-      canvas.ontouchmove = (e) => { e.preventDefault(); draw(e); };
-      canvas.ontouchend = endDraw;
-
-      canvasesAtivos[codigo] = { canvas, ctx };
-    }
-
-    function limparCanvasAtivo(codigo) {
-      if (canvasesAtivos[codigo]) {
-        const { canvas, ctx } = canvasesAtivos[codigo];
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const numMed = obterMedicaoAtualLimpa();
-        const chaveCroqui = `croqui_${obraAtiva.uid}_${codigo}_${numMed}`;
-        localStorage.removeItem(chaveCroqui);
-      }
-    }
-
-    function capturarFotoInline(event, codigo) {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const img = new Image();
-        img.onload = function() {
-          const c = document.createElement("canvas");
-          const maxDim = 1280;
-          let w = img.width;
-          let h = img.height;
-          if (w > maxDim || h > maxDim) {
-            if (w > h) { h = (h * maxDim) / w; w = maxDim; }
-            else { w = (w * maxDim) / h; h = maxDim; }
-          }
-          c.width = w;
-          c.height = h;
-          const cx = c.getContext("2d");
-          cx.drawImage(img, 0, 0, w, h);
-
-          const hoje = new Date().toLocaleDateString("pt-BR");
-          const numMed = obterMedicaoAtualLimpa();
-          const texto = `OAT: ${obraAtiva.demanda} | MED: ${numMed} | ITEM: ${codigo} | DATA: ${hoje}`;
-          cx.fillStyle = "rgba(0, 0, 0, 0.65)";
-          cx.fillRect(15, c.height - 50, 720, 40);
-          cx.fillStyle = "#FFFFFF";
-          cx.font = "bold 20px Arial";
-          cx.fillText(texto, 25, c.height - 22);
-
-          const jpegBase64 = c.toDataURL("image/jpeg", 0.85);
-
-          const chaveFoto = `foto_${obraAtiva.uid}_${codigo}_${numMed}`;
-          localStorage.setItem(chaveFoto, jpegBase64);
-
-          const a = document.createElement("a");
-          const dataNome = hoje.split("/").reverse().join("");
-          const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-          const medNome = numMed.replace(/[\/\\:\*\?"<>\|\s]/g, "_");
-          a.download = `${idOAT}_MED${medNome}_${codigo}_${dataNome}_01.jpg`;
-          a.href = jpegBase64;
-          a.click();
-
-          const statusFotoEl = document.getElementById(`statusFoto_${codigo}`);
-          if (statusFotoEl) statusFotoEl.innerText = "✅ Foto de campo anexada para o Caderno PDF";
-
-          registrarSnapshotAutomatico(`Foto anexada ao item ${codigo}`);
-          alert(`Foto gravada na memória e anexada ao item ${codigo} (Medição ${numMed})!`);
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function dispararGeracaoCaderno() {
-      if (!obraAtiva) {
-        alert("Selecione ou cadastre uma OAT primeiro.");
-        return;
-      }
-      const numMed = obterMedicaoAtualLimpa();
-      window.gerarCadernoMedicaoPDF(obraAtiva, numMed);
-    }
-
-    // =========================================================================
-    // GESTÃO DA LIXEIRA
-    // =========================================================================
-    function moverObraParaLixeira() {
-      if (!obraAtiva) return;
-
-      const confirma = confirm(`Deseja mover a OAT "${obraAtiva.demanda}" (${obraAtiva.nome}) para a lixeira?\n\nEla poderá ser restaurada a qualquer momento.`);
-      if (!confirma) return;
-
-      const obraParaExcluir = { ...obraAtiva, dataExclusao: new Date().toLocaleDateString("pt-BR") };
-      lixeiraObras.push(obraParaExcluir);
-      localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
-
-      obrasCadastradas = obrasCadastradas.filter(o => o.uid !== obraAtiva.uid);
-      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-
-      obraAtiva = obrasCadastradas.length > 0 ? obrasCadastradas[0] : null;
-      codigoItemAberto = null;
-      carregarSeletorObras();
-
-      alert("OAT movida para a lixeira com sucesso!");
-    }
-
-    function abrirModalLixeira() {
-      const lista = document.getElementById("listaLixeira");
-      lista.innerHTML = "";
-
-      if (lixeiraObras.length === 0) {
-        lista.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">A lixeira está vazia.</p>`;
-      } else {
-        lixeiraObras.forEach((o) => {
-          const div = document.createElement("div");
-          div.className = "flex justify-between items-center p-3 bg-slate-50 border rounded-lg text-xs";
-          div.innerHTML = `
-            <div>
-              <span class="font-bold text-slate-800 block">${o.nome}</span>
-              <span class="text-blue-900 font-mono font-semibold">${o.demanda}</span>
-              <span class="text-slate-400 text-[10px] ml-2">(${o.itens.length} itens) • Excluído em: ${o.dataExclusao || 'Recente'}</span>
-            </div>
-            <button onclick="restaurarObraDaLixeira('${o.uid}')" class="bg-blue-800 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded shadow text-xs">
-              Restaurar
-            </button>
-          `;
-          lista.appendChild(div);
-        });
-      }
-
-      document.getElementById("modalLixeira").classList.remove("hidden");
-    }
-
-    function fecharModalLixeira() { document.getElementById("modalLixeira").classList.add("hidden"); }
-
-    function restaurarObraDaLixeira(uid) {
-      const idx = lixeiraObras.findIndex(o => o.uid === uid);
-      if (idx < 0) return;
-
-      const obraRestaurada = lixeiraObras.splice(idx, 1)[0];
-      delete obraRestaurada.dataExclusao;
-
-      obrasCadastradas.push(obraRestaurada);
-      localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-      localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
-
-      fecharModalLixeira();
-      obraAtiva = obraRestaurada;
-      codigoItemAberto = null;
-      carregarSeletorObras();
-
-      alert(`OAT ${obraRestaurada.demanda} restaurada com sucesso!`);
-    }
-
-    function esvaziarLixeiraDefinitivamente() {
-      if (lixeiraObras.length === 0) return;
-      const confirma = confirm("Deseja apagar PERMANENTEMENTE todos os itens da lixeira? Esta ação não pode ser desfeita.");
-      if (confirma) {
-        lixeiraObras = [];
-        localStorage.setItem("lixeira_obras_sop", JSON.stringify(lixeiraObras));
-        fecharModalLixeira();
-        atualizarContagemLixeira();
-        alert("Lixeira esvaziada.");
-      }
-    }
-
-    // Modal Relatório Oficial (Espelho SGO)
-    function abrirModalRelatorio() {
-      if (!obraAtiva) return;
-
-      const numMed = obterMedicaoAtualLimpa();
-      document.getElementById("relatorioSubtitulo").innerText = `${obraAtiva.nome} | OAT ${obraAtiva.demanda} | Medição Nº ${numMed}`;
-      const tbody = document.getElementById("corpoTabelaRelatorio");
-      tbody.innerHTML = "";
-
-      obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
-        const acum = d.ant + d.per;
-        const saldo = it.qtd - acum;
-
-        const tr = document.createElement("tr");
-        tr.className = d.per > 0 ? "bg-amber-50 font-semibold" : (idx % 2 === 0 ? "bg-white" : "bg-slate-50");
-        tr.innerHTML = `
-          <td class="p-2 border text-slate-500">${idx + 1}</td>
-          <td class="p-2 border font-mono font-bold text-blue-900">${it.codigo}</td>
-          <td class="p-2 border text-slate-800">${it.desc}</td>
-          <td class="p-2 border text-center text-slate-600">${it.un}</td>
-          <td class="p-2 border text-right">${it.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-          <td class="p-2 border text-right text-slate-500">${d.ant.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-          <td class="p-2 border text-right font-extrabold ${d.per > 0 ? 'text-blue-900 bg-amber-100' : 'text-slate-400'}">${d.per.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-          <td class="p-2 border text-right font-bold">${acum.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-          <td class="p-2 border text-right ${saldo < 0 ? 'text-red-600 font-bold' : 'text-emerald-700'}">${saldo.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      document.getElementById("modalRelatorio").classList.remove("hidden");
-    }
-
-    function fecharModalRelatorio() { document.getElementById("modalRelatorio").classList.add("hidden"); }
-
-    function exportarCSVRelatorio() {
-      if (!obraAtiva) return;
-
-      const numMed = obterMedicaoAtualLimpa();
-      let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
-
-      obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
-        const acum = d.ant + d.per;
-        const saldo = it.qtd - acum;
-        csv += `${idx + 1};"${it.codigo}";"${it.desc.replace(/"/g, '""')}";"${it.un}";${it.qtd};${d.ant};${d.per};${acum};${saldo}\n`;
-      });
-
-      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      const idOAT = obraAtiva.demanda.replace(/[\/\\]/g, "_");
-      const medNome = numMed.replace(/[\/\\:\*\?"<>\|\s]/g, "_");
-      a.download = `Espelho_SGO_${idOAT}_Medicao_${medNome}.csv`;
-      a.click();
-    }
-
-    function abrirModalNovaObra() { document.getElementById("modalNovaObra").classList.remove("hidden"); }
-    function fecharModalNovaObra() { document.getElementById("modalNovaObra").classList.add("hidden"); }
-
-    document.getElementById("btnProcessarPDFs").onclick = async () => {
-      const fileOrcamento = document.getElementById("pdfOrcamentoInput").files[0];
-      const status = document.getElementById("statusExtracao");
-
-      if (!fileOrcamento) {
-        alert("Por favor, selecione o PDF do Orçamento.");
-        return;
-      }
-
-      status.innerText = "⏳ Extraindo dados do SGO...";
-
-      try {
-        const novaObra = await window.extrairDadosOrcamentoSGO(fileOrcamento);
-
-        obrasCadastradas.push(novaObra);
-        localStorage.setItem("obras_sop", JSON.stringify(obrasCadastradas));
-
-        status.innerText = `✅ Sucesso! ${novaObra.itens.length} composições importadas.`;
-
-        setTimeout(() => {
-          fecharModalNovaObra();
-          obraAtiva = novaObra;
-          codigoItemAberto = null;
-          carregarSeletorObras();
-          alert(`OAT ${novaObra.demanda} cadastrada com ${novaObra.itens.length} composições com sucesso!`);
-        }, 500);
-
-      } catch (err) {
-        console.error("Erro na extração:", err);
-        status.innerText = "❌ " + (err.message || "Erro ao ler o PDF.");
-      }
-    };
-
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      });
-    }
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          document.getElementById("gpsStatus").innerText = `📍 GPS: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-        },
-        () => {
-          document.getElementById("gpsStatus").innerText = "📍 GPS: Desativado";
-        }
-      );
-    }
-
-    document.getElementById("buscaItem").addEventListener("input", renderizarLista);
-    document.getElementById("filtroGrupo").addEventListener("change", renderizarLista);
-    document.getElementById("medicaoNumero").addEventListener("input", () => {
-      renderizarLista();
-    });
-
-    setTimeout(() => {
-      carregarSeletorObras();
-    }, 150);
-  </script>
-</body>
-</html>
