@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fiscalização SOP/RS - Caderno de Medições</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- SheetJS para ler Excel (.xlsx / .xls) e CSV -->
+  <!-- SheetJS para ler Excel (.xlsx / .xls / .xlsm) e CSV -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <!-- PDF.js via CDN Oficial sem worker externo -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -50,8 +50,9 @@
         <button id="btnEspelhoSGO" onclick="abrirModalRelatorio()" class="hidden bg-amber-600 hover:bg-amber-500 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
           📊 Espelho SGO
         </button>
+        <!-- BOTÃO COM TEXTO ATUALIZADO PARA XLSX -->
         <button onclick="abrirModalNovaObra()" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded-lg font-bold shadow flex items-center gap-1 transition">
-          📊 Inserir Orçamento (Excel/PDF)
+          📊 Inserir OAT (XLSX/PDF)
         </button>
         <span id="gpsStatus" class="text-xs bg-blue-950 text-emerald-300 px-2 py-1 rounded-md font-mono flex items-center gap-1">
           📍 GPS: Ativo
@@ -75,7 +76,7 @@
       <div class="flex items-center gap-3">
         <div class="flex items-center gap-2">
           <span class="text-xs font-bold text-slate-600">Medição Atual:</span>
-          <input type="text" id="medicaoNumero" value="1" placeholder="Ex: 1, 1.1" class="w-20 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50 uppercase">
+          <input type="text" id="medicaoNumero" value="1" placeholder="Ex: 1, 1.1, 2" class="w-20 border text-center font-bold text-blue-900 rounded p-1 text-sm bg-slate-50 uppercase">
         </div>
         <button onclick="criarSnapshotManual()" title="Grava um ponto de recuperação com a data e hora atual" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1">
           📸 Criar Ponto de Restauração
@@ -94,8 +95,8 @@
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
       <div class="flex justify-between items-start mb-3">
         <div>
-          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT / Orçamento</h3>
-          <p class="text-xs text-slate-500">Selecione a Planilha Excel (.xlsx, .xls) ou PDF oficial:</p>
+          <h3 class="text-base font-bold text-blue-950">Cadastrar Nova OAT (XLSX / PDF)</h3>
+          <p class="text-xs text-slate-500">Selecione o arquivo Excel (.xlsx, .xlsm) ou PDF oficial:</p>
         </div>
         <button onclick="fecharModalNovaObra()" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
@@ -103,9 +104,9 @@
       <div class="border-2 border-dashed border-emerald-300 rounded-xl p-5 bg-emerald-50/50 text-center mb-3">
         <label class="block cursor-pointer">
           <span class="text-4xl block mb-2">📊</span>
-          <span class="text-xs font-bold text-emerald-950 block mb-1">Clique para selecionar a Planilha Excel (.xlsx) ou PDF</span>
-          <span class="text-[10px] text-slate-500 block mb-3">Lê a aba "ORÇ ESC 1ª FASE" com as colunas D, E, H, I, J</span>
-          <input type="file" id="arquivoOrcamentoInput" accept=".xlsx, .xls, .csv, application/pdf" class="hidden">
+          <span class="text-xs font-bold text-emerald-950 block mb-1">Clique para selecionar o Arquivo Excel (.xlsx, .xlsm) ou PDF</span>
+          <span class="text-[10px] text-slate-500 block mb-3">Acessa automaticamente a aba "ORÇ ESC 1ª FASE" (Colunas D, E, H, I, J)</span>
+          <input type="file" id="arquivoOrcamentoInput" accept=".xlsx, .xlsm, .xls, .csv, application/pdf" class="hidden">
         </label>
         <span id="nomeArquivoSelecionado" class="text-xs font-semibold text-slate-700 block truncate"></span>
       </div>
@@ -115,7 +116,7 @@
       <div class="flex justify-end gap-2">
         <button onclick="fecharModalNovaObra()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
         <button id="btnProcessarArquivo" class="px-5 py-2 text-xs font-bold bg-emerald-800 text-white hover:bg-emerald-700 rounded-lg shadow">
-          Processar e Cadastrar
+          Processar e Cadastrar OAT
         </button>
       </div>
     </div>
@@ -231,6 +232,37 @@
       return val || "1";
     }
 
+    // Identifica e busca automaticamente a medição antecessora para trazer o saldo anterior
+    function calcularAnteriorHerdado(itemCodigo, medAtualStr) {
+      if (!obraAtiva) return 0;
+      
+      const numAtual = parseFloat(medAtualStr);
+      let melhorCandidata = null;
+      let maiorNum = -1;
+
+      // Percorre as chaves salvas procurando medições anteriores desta mesma OAT e item
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        const prefixo = `med_${obraAtiva.uid}_${itemCodigo}_`;
+        if (k && k.startsWith(prefixo)) {
+          const medSalvaStr = k.replace(prefixo, "");
+          const numSalva = parseFloat(medSalvaStr);
+          if (!isNaN(numSalva) && !isNaN(numAtual) && numSalva < numAtual) {
+            if (numSalva > maiorNum) {
+              maiorNum = numSalva;
+              melhorCandidata = k;
+            }
+          }
+        }
+      }
+
+      if (melhorCandidata) {
+        const dadosAnt = JSON.parse(localStorage.getItem(melhorCandidata)) || { ant: 0, per: 0 };
+        return dadosAnt.ant + dadosAnt.per;
+      }
+      return 0;
+    }
+
     function atualizarContagemLixeira() {
       document.getElementById("contagemLixeira").innerText = lixeiraObras.length;
     }
@@ -315,12 +347,12 @@
       container.innerHTML = `
         <div class="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 text-center max-w-lg mx-auto my-12 shadow-sm">
           <div class="text-5xl mb-3">📊</div>
-          <h3 class="text-base font-bold text-slate-800 mb-1">Nenhum Orçamento Cadastrado</h3>
+          <h3 class="text-base font-bold text-slate-800 mb-1">Nenhum Orçamento / OAT Cadastrado</h3>
           <p class="text-xs text-slate-500 mb-6 leading-relaxed">
             Selecione a Planilha Excel (.xlsx) da obra com a aba "ORÇ ESC 1ª FASE" ou o PDF oficial para carregar as composições e medições.
           </p>
           <button onclick="abrirModalNovaObra()" class="bg-emerald-800 hover:bg-emerald-700 text-white text-xs px-5 py-2.5 rounded-xl font-bold shadow-md transition inline-flex items-center gap-2">
-            <span>➕</span> Inserir Orçamento (Excel/PDF)
+            <span>➕</span> Inserir OAT (XLSX/PDF)
           </button>
         </div>
       `;
@@ -451,7 +483,8 @@
     }
 
     // =========================================================================
-    // RENDERIZADOR SANFONA INLINE (COM MED. ANTERIOR \ SALDO ACUMULADO)
+    // RENDERIZADOR SANFONA INLINE
+    // COM "Med. Anterior \ Saldo Acumulado" E CARREGAMENTO AUTOMÁTICO DE SALDO
     // =========================================================================
     function renderizarLista() {
       if (!obraAtiva) {
@@ -475,7 +508,14 @@
       itensFiltrados.forEach((item) => {
         const isAberto = item.codigo === codigoItemAberto;
         const chaveItem = `med_${obraAtiva.uid}_${item.codigo}_${numMed}`;
-        const dadosSalvos = JSON.parse(localStorage.getItem(chaveItem)) || { ant: 0, per: 0, mem: "" };
+        
+        // Se existir dado salvo para esta medição usa ele, caso contrário herda o acumulado da anterior
+        let dadosSalvos = JSON.parse(localStorage.getItem(chaveItem));
+        if (!dadosSalvos) {
+          const anteriorHerdado = calcularAnteriorHerdado(item.codigo, numMed);
+          dadosSalvos = { ant: anteriorHerdado, per: 0, mem: "" };
+        }
+
         const acumSalvo = dadosSalvos.ant + dadosSalvos.per;
         const saldoSalvo = item.qtd - acumSalvo;
 
@@ -516,23 +556,25 @@
 
           gaveta.innerHTML = `
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+              <!-- QTD CONTRATADA -->
               <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Total Contrato</span>
                 <span class="font-bold text-slate-800 text-sm mt-1">${item.qtd.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
               </div>
 
+              <!-- RÓTULO SOLICITADO: Med. Anterior \\ Saldo Acumulado -->
               <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
                 <div class="flex justify-between items-baseline mb-1">
-                  <span class="text-slate-500 block text-[10px] uppercase font-bold">Med. Anterior</span>
-                  <span class="text-[9px] text-slate-400">Salvo: ${dadosSalvos.ant.toFixed(2)}</span>
+                  <span class="text-slate-600 block text-[10px] uppercase font-bold tracking-tight">Med. Anterior \\ Saldo Acumulado</span>
                 </div>
                 <input type="number" id="inline_ant_${item.codigo}" value="${dadosSalvos.ant.toFixed(2)}" step="0.01" class="w-full border rounded p-1 font-semibold text-slate-700 bg-slate-50 text-xs">
                 <div class="mt-1.5 pt-1 border-t border-slate-100 flex justify-between items-center text-[10px]">
-                  <span class="text-slate-400 font-semibold uppercase">Acumulado:</span>
-                  <span id="inline_acum_${item.codigo}" class="font-bold text-slate-700 font-mono">${acumSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
+                  <span class="text-slate-400 font-semibold uppercase">Acumulado Atual:</span>
+                  <span id="inline_acum_${item.codigo}" class="font-bold text-slate-800 font-mono">${acumSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
                 </div>
               </div>
 
+              <!-- MEDIÇÃO ATUAL -->
               <div class="bg-white p-2 rounded-lg border-2 border-blue-600 flex flex-col justify-between">
                 <div class="flex justify-between items-baseline mb-1">
                   <span class="text-blue-700 block text-[10px] uppercase font-bold">Medição Atual (${numMed})</span>
@@ -544,6 +586,7 @@
                 </div>
               </div>
 
+              <!-- SALDO RESTANTE -->
               <div class="bg-white p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
                 <span class="text-slate-400 block text-[10px] uppercase font-bold">Saldo Restante</span>
                 <span id="inline_saldo_${item.codigo}" class="font-bold ${saldoSalvo < 0 ? 'text-red-600' : 'text-emerald-700'} text-sm mt-1">${saldoSalvo.toLocaleString('pt-BR', {minimumFractionDigits: 2})} ${item.un}</span>
@@ -557,6 +600,7 @@
               <input type="text" id="inline_mem_${item.codigo}" value="${dadosSalvos.mem || ''}" placeholder="Memória de cálculo: Trecho A (12,50 x 2,80) - Vão (1,20 x 1,50)" class="w-full text-xs p-2 border rounded-lg bg-white font-mono">
             </div>
 
+            <!-- Área de Croquis Cotado -->
             <div class="border border-blue-900 rounded-lg overflow-hidden bg-white shadow-inner">
               <div class="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-xs">
                 <span class="font-bold text-blue-900 text-[11px]">Área de Desenho Cotado e Esquemas Gráficos</span>
@@ -866,8 +910,13 @@
       tbody.innerHTML = "";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
+        const chaveItem = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+        let d = JSON.parse(localStorage.getItem(chaveItem));
+        if (!d) {
+          const antHerdado = calcularAnteriorHerdado(it.codigo, numMed);
+          d = { ant: antHerdado, per: 0 };
+        }
+
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
 
@@ -899,8 +948,12 @@
       let csv = "Item;Codigo;Descricao;Unidade;Qtd_Contratada;Med_Anterior;Med_Periodo;Total_Acumulado;Saldo\n";
 
       obraAtiva.itens.forEach((it, idx) => {
-        const chave = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
-        const d = JSON.parse(localStorage.getItem(chave)) || { ant: 0, per: 0 };
+        const chaveItem = `med_${obraAtiva.uid}_${it.codigo}_${numMed}`;
+        let d = JSON.parse(localStorage.getItem(chaveItem));
+        if (!d) {
+          const antHerdado = calcularAnteriorHerdado(it.codigo, numMed);
+          d = { ant: antHerdado, per: 0 };
+        }
         const acum = d.ant + d.per;
         const saldo = it.qtd - acum;
         csv += `${idx + 1};"${it.codigo}";"${it.desc.replace(/"/g, '""')}";"${it.un}";${it.qtd};${d.ant};${d.per};${acum};${saldo}\n`;
@@ -922,7 +975,6 @@
       document.getElementById("modalNovaObra").classList.add("hidden"); 
     }
 
-    // Monitora seleção de arquivo para exibir nome
     document.getElementById("arquivoOrcamentoInput").addEventListener("change", function(e) {
       const file = e.target.files[0];
       if (file) {
@@ -930,13 +982,12 @@
       }
     });
 
-    // Processamento do Arquivo (Detecta se é Excel ou PDF)
     document.getElementById("btnProcessarArquivo").onclick = async () => {
       const file = document.getElementById("arquivoOrcamentoInput").files[0];
       const status = document.getElementById("statusExtracao");
 
       if (!file) {
-        alert("Por favor, selecione uma Planilha Excel (.xlsx) ou PDF.");
+        alert("Por favor, selecione uma Planilha Excel (.xlsx, .xlsm) ou PDF.");
         return;
       }
 
@@ -945,12 +996,12 @@
 
       try {
         let novaObra;
-        if (extensao === "xlsx" || extensao === "xls" || extensao === "csv") {
+        if (extensao === "xlsx" || extensao === "xlsm" || extensao === "xls" || extensao === "csv") {
           novaObra = await window.extrairDadosPlanilhaExcel(file);
         } else if (extensao === "pdf") {
           novaObra = await window.extrairDadosOrcamentoSGO(file);
         } else {
-          throw new Error("Formato não suportado. Envie um arquivo .xlsx, .xls ou .pdf.");
+          throw new Error("Formato não suportado. Envie um arquivo .xlsx, .xlsm, .xls ou .pdf.");
         }
 
         obrasCadastradas.push(novaObra);
