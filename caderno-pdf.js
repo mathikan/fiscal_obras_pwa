@@ -1,6 +1,6 @@
 /**
  * caderno-pdf.js - Gerador Oficial de Caderno de Medições (SOP/RS)
- * Suporte a medições decimais/alfanuméricas (ex.: 1, 1.1, 1.2, 1-A)
+ * Versão Limpa: Sem anotação fixa de memória de cálculo/dimensões e sem texto pré-definido no parecer do fiscal.
  * Diagramação A4: Folha Técnica com Croqui Cotado (Esquerda) + Fotografia (Direita)
  */
 
@@ -131,7 +131,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
   });
 
   // =========================================================================
-  // PÁGINAS INDIVIDUAIS: FICHAS TÉCNICAS COM CROQUI E FOTO LADO A LADO
+  // PÁGINAS INDIVIDUAIS: FICHAS TÉCNICAS (SEM MEMÓRIA ARITMÉTICA E SEM TEXTO FIXO)
   // =========================================================================
   for (let it of obra.itens) {
     const chaveItem = `med_${obra.uid}_${it.codigo}_${medStr}`;
@@ -149,19 +149,21 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       }
     }
 
-    if (d.per > 0 || d.mem || fotoBase64) {
+    if (d.per > 0 || fotoBase64 || croquiBase64) {
       doc.addPage();
 
+      // Cabeçalho da Ficha Técnica
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       doc.setTextColor(...azulEscuro);
-      doc.text(`MEMÓRIA DE MEDIÇÃO — COMPOSIÇÃO ${it.codigo}`, 14, 16);
+      doc.text(`FICHA DE MEDIÇÃO — COMPOSIÇÃO ${it.codigo}`, 14, 16);
 
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
       doc.setTextColor(15, 23, 42);
       doc.text(`Etapa: ${it.grupo}  |  Serviço: ${it.desc}`, 14, 22, { maxWidth: 182 });
 
+      // Faixa Métrica de Quantitativos
       doc.setFillColor(...cinzaFundo);
       doc.setDrawColor(...azulBorda);
       doc.roundedRect(14, 28, 182, 14, 1.5, 1.5, "FD");
@@ -170,21 +172,17 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
       const txtMetrico = `Contratado: ${it.qtd.toFixed(2)} ${it.un}    |    Med. Anterior: ${d.ant.toFixed(2)} ${it.un}    |    Nesta Medição: ${d.per.toFixed(2)} ${it.un}    |    Saldo: ${(it.qtd - (d.ant + d.per)).toFixed(2)} ${it.un}`;
       doc.text(txtMetrico, 18, 37);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(...azulEscuro);
-      doc.text("Memória de Cálculo Aritmética / Dimensões:", 14, 50);
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(15, 23, 42);
-      doc.text(d.mem || "Medição aferida por conferência métrica visual direta em canteiro de obras.", 14, 56, { maxWidth: 182 });
-
-      // Área Visual Dupla Lado a Lado
-      const boxY = 66;
+      // =====================================================================
+      // ÁREA VISUAL: QUADRO DUPLO LADO A LADO
+      // Reposicionado mais acima (boxY = 50), expandindo a altura útil (boxH = 150)
+      // Caixa 1 (Croqui): X=14 mm, W=88 mm, H=150 mm
+      // Caixa 2 (Foto):   X=108 mm, W=88 mm, H=150 mm
+      // =====================================================================
+      const boxY = 50;
       const boxW = 88;
-      const boxH = 105;
+      const boxH = 150;
 
-      // Lado Esquerdo: Croqui
+      // --- LADO ESQUERDO: CROQUI COTADO ---
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
@@ -203,7 +201,7 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
         doc.text("Nenhum croqui registrado", 14 + (boxW / 2), boxY + (boxH / 2), { align: "center" });
       }
 
-      // Lado Direito: Fotografia
+      // --- LADO DIREITO: FOTOGRAFIA DE CAMPO ---
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
@@ -222,22 +220,24 @@ window.gerarCadernoMedicaoPDF = async function(obra, numMedicao) {
         doc.text("Nenhuma fotografia anexada", 108 + (boxW / 2), boxY + (boxH / 2), { align: "center" });
       }
 
-      // Notas e Parecer
+      // --- CAMPO LIMPO: PARECER DO FISCAL / OBSERVAÇÕES (SEM FRASE PRÉ-DEFINIDA) ---
+      const obsY = boxY + boxH + 8;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(...azulEscuro);
-      doc.text("Parecer do Fiscal / Observações:", 14, 182);
+      doc.text("Parecer do Fiscal / Observações:", 14, obsY);
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      doc.setTextColor(51, 65, 85);
-      doc.text("Serviço executado em conformidade com as especificações técnicas, projetos executivos e normas regulamentadoras vigentes no Estado do Rio Grande do Sul.", 14, 188, { maxWidth: 182 });
+      // Caixa em branco limpa para anotação livre ou assinatura
+      doc.setDrawColor(226, 232, 240);
+      doc.setFillColor(...cinzaFundo);
+      doc.roundedRect(14, obsY + 3, 182, 38, 1.5, 1.5, "FD");
 
-      // Rodapé
+      // Rodapé da Folha Individual
       doc.setDrawColor(226, 232, 240);
       doc.line(14, 280, 196, 280);
       doc.setFontSize(7);
       doc.setTextColor(...cinzaTexto);
+      doc.setFont("helvetica", "normal");
       doc.text(`Caderno Oficial de Fiscalização SOP/RS — OAT: ${obra.demanda} — Medição Nº ${rotuloMedicao}`, 14, 285);
       doc.text(`Folha Técnica: Item ${it.codigo}`, 196, 285, { align: "right" });
     }
